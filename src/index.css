@@ -10,7 +10,31 @@
 ::-webkit-scrollbar-thumb { background: #e7e5e4; border-radius: 999px; }
 ::-webkit-scrollbar-track { background: transparent; }
 
+/* Focus visible — WCAG 2.4.7 */
+:focus-visible {
+  outline: 2px solid #7c3aed;
+  outline-offset: 2px;
+}
+button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible {
+  outline: 2px solid #7c3aed;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.15);
+}
+
 @media print {
   header, .no-print { display: none !important; }
   main { padding: 0 !important; }
+  /* Prevent clipping — fix tables + charts */
+  [class*="overflow-auto"], [class*="max-h-"] {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+  table { page-break-inside: auto; }
+  tr { page-break-inside: avoid; page-break-after: auto; }
+  .bg-white, [class*="rounded-2xl"] {
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  @page { margin: 12mm; }
 }
