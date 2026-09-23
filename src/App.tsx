@@ -141,6 +141,8 @@ export default function App(){
   const [rankingMetric,setRankingMetric]=useState<"DOWNLOADS"|"REGISTERED USERS"|"ACTUAL USERS"|"PARTICIPATION RATE">("DOWNLOADS")
   const fileRef=useRef<HTMLInputElement>(null)
   const [lastUpdated,setLastUpdated]=useState<string>(()=> new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}))
+  const [toast,setToast]=useState<string|null>(null)
+  const isSearchPending = search !== deferredSearch
 
   const active = wb?.sheets[sheetIdx] ?? null
   const datasetType = useMemo(()=> active? detectType(active.headers):"generic", [active])
@@ -165,6 +167,7 @@ export default function App(){
     }catch(e){ console.error(e); alert("Sample load failed") } finally{setLoading(false)}
   }
 
+   useEffect(()=>{ if(toast){ const t=setTimeout(()=>setToast(null),2500); return ()=>clearTimeout(t) } },[toast])
   useEffect(()=>{
     if(!active) return
     setVisibleCols(active.headers)
@@ -510,8 +513,10 @@ export default function App(){
 
             {view==="dashboard" && (
               <div id="panel-dashboard" role="tabpanel" aria-labelledby="tab-dashboard" tabIndex={0} className="space-y-4 outline-none">
+                {loading && <div aria-busy="true" aria-live="polite" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">{[1,2,3,4,5].map(i=><div key={i} className="bg-white border border-stone-200 rounded-2xl p-4 animate-pulse"><div className="h-3 w-20 bg-stone-200 rounded-full"/><div className="h-8 w-24 bg-stone-200 rounded mt-3"/><div className="h-3 w-32 bg-stone-100 rounded mt-2"/></div>)}</div>}
+                {isSearchPending && !loading && <div role="status" aria-live="polite" className="text-xs text-violet-600 bg-violet-50 border border-violet-200 rounded-full px-3 py-1.5 inline-flex items-center gap-2"><span className="size-2 rounded-full bg-violet-600 animate-pulse"/>Searching…</div>}
                 {/* KPI row as per spec section 4 + change indicators */}
-                {datasetType==="school" && schoolKPIs && (
+                {!loading && datasetType==="school" && schoolKPIs && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                     {[
                       {label:"Total Schools", value:fmt(schoolKPIs.totalSchools), sub: schoolFilter!=="All Schools"? `filtered of ${fmt(schoolKPIs.overall.totalSchools)}`:`all schools`, delta: comparison?.schoolsChange!=null? `${comparison.schoolsChange>0?"+":""}${comparison.schoolsChange} vs Aug`:"vs previous", color:"from-violet-600 to-indigo-500"},
@@ -520,16 +525,16 @@ export default function App(){
                       {label:"Participation Rate", value: schoolKPIs.avgParticipation.toFixed(1)+"%", sub: schoolKPIs.avgParticipation===0?"0% — all 0% in file":`overall participation`, delta: schoolKPIs.avgParticipation===0?"no change":`Δ ${(schoolKPIs.avgParticipation-0).toFixed(1)} pp`, color:"from-amber-500 to-orange-500"},
                       {label:"Total Downloads", value:fmtCompact(schoolKPIs.totalDownloads), sub:`avg ${fmt(Math.round(schoolKPIs.avgDownloads))} • max ${fmtCompact(schoolKPIs.maxDownloads)}`, delta: comparison? `${comparison.downloadsChange>0?"▲":"▼"} ${Math.abs(comparison.downloadsChange).toFixed(1)}% vs Aug`:"auto", color:"from-fuchsia-600 to-pink-500"},
                     ].map(k=>(
-                      <div key={k.label} className="bg-white border border-stone-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition">
-                        <div className="text-[10px] font-bold tracking-[0.14em] uppercase text-stone-600">{k.label}</div>
-                        <div className="text-[24px] font-extrabold tracking-tight text-stone-900 leading-none mt-2">{k.value}</div>
+                      <div key={k.label} className="bg-white border border-stone-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition min-w-0">
+                        <div className="text-[10px] font-bold tracking-[0.14em] uppercase text-stone-600 truncate">{k.label}</div>
+                        <div className="text-[24px] font-extrabold tracking-tight text-stone-900 leading-none mt-2 truncate">{k.value}</div>
                         <div className="text-xs text-stone-600 mt-1 truncate">{k.sub}</div>
-                        <div className={`mt-2 inline-flex text-[11px] font-bold rounded-full px-2.5 py-1 bg-gradient-to-br ${k.color} text-white shadow`}>{k.delta}</div>
+                        <div className={`mt-2 inline-flex text-[11px] font-bold rounded-full px-2.5 py-1 bg-gradient-to-br ${k.color} text-white shadow max-w-full truncate`}>{k.delta}</div>
                       </div>
                     ))}
                   </div>
                 )}
-                {datasetType==="user" && userKPIs && (
+                {!loading && datasetType==="user" && userKPIs && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                     {[
                       {label:"Total Users", value:fmt(userKPIs.totalUsers), sub:`${fmt(userKPIs.newUsers)} new in ${reportingMonth}`, delta:`${userKPIs.byRole[0]?.[0]??"—"} dominant`},
@@ -547,7 +552,7 @@ export default function App(){
                     ))}
                   </div>
                 )}
-                {datasetType==="generic" && (
+                {!loading && datasetType==="generic" && (
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                     <div className="bg-white border border-stone-200 rounded-2xl p-4"><div className="text-[10px] font-bold tracking-widest uppercase text-stone-600">Rows</div><div className="text-2xl font-extrabold mt-1">{fmt(filtered.length)}</div><div className="text-xs text-stone-600">of {fmt(active?.rows.length??0)} total</div></div>
                     {genericSummary.map(s=>(
@@ -562,7 +567,7 @@ export default function App(){
                     <div><div className="text-sm font-bold text-stone-900">MONTHLY TREND</div><div className="text-xs text-stone-600">Registered • Active • Downloads • Schools (auto-updates when new month added)</div></div>
                     <span className="text-xs bg-stone-900 text-white rounded-full px-3 py-1.5">Jan – Sep 2026</span>
                   </div>
-                  <div className="h-[300px] p-3">
+                  <div className="h-[300px] p-3" role="img" aria-label={`Monthly trend showing downloads from Jan to Sep, total ${fmtCompact(trendData[trendData.length-1]?.downloads ?? 0)} downloads`}>
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={trendData}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f4"/>
@@ -703,7 +708,7 @@ export default function App(){
                         <BarChart data={[...rankingData].reverse()} layout="vertical" margin={{left:10,right:20}}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f4" horizontal={false}/>
                           <XAxis type="number" tick={{fontSize:11}} tickFormatter={fmtCompact}/>
-                          <YAxis dataKey="name" type="category" width={180} tick={{fontSize:11}}/>
+                          <YAxis dataKey="name" type="category" width={140} tick={{fontSize:11, width:130}} tickFormatter={(v:string)=> v.length>22 ? v.slice(0,22)+'…' : v}/>
                           <Tooltip content={<Tip/>}/>
                           <Bar dataKey="value" fill="#7c3aed" radius={[0,8,8,0]}/>
                         </BarChart>
@@ -735,11 +740,11 @@ export default function App(){
                     <div><div className="text-sm font-bold text-stone-900">School Detail Table — with data bars & participation scale</div><div className="text-xs text-stone-600">Click headers to sort • visual indicators make large differences immediate</div></div>
                     <span className="text-xs bg-stone-50 border border-stone-200 rounded-full px-3 py-1">{filtered.length} rows</span>
                   </div>
-                  <div className="overflow-auto max-h-[560px]">
+                  <div tabIndex={0} role="region" aria-label="School detail table, scroll to see more columns" className="overflow-auto max-h-[560px] focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-inset outline-none">
                     <table className="w-full text-sm">
                       <thead className="sticky top-0 bg-stone-50 border-b border-stone-200">
                         <tr>{displayedHeaders.map(h=>(
-                          <th key={h} onClick={()=>{ if(sortKey===h) setSortDir(d=>d==="asc"?"desc":"asc"); else {setSortKey(h); setSortDir("asc")}}} className="text-left px-3 py-2.5 font-semibold cursor-pointer whitespace-nowrap hover:bg-stone-100">{h} {sortKey===h&&(sortDir==="asc"?"▲":"▼")}</th>
+                          <th key={h} scope="col" tabIndex={0} role="button" aria-sort={sortKey===h ? (sortDir==="asc" ? "ascending" : "descending") : "none"} aria-label={`${h}, sortable`} onClick={()=>{ if(sortKey===h) setSortDir(d=>d==="asc"?"desc":"asc"); else {setSortKey(h); setSortDir("asc")}}} onKeyDown={e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); if(sortKey===h) setSortDir(d=>d==="asc"?"desc":"asc"); else {setSortKey(h); setSortDir("asc")} } }} className="text-left px-3 py-2.5 font-semibold cursor-pointer whitespace-nowrap hover:bg-stone-100 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-500 outline-none">{h} <span aria-hidden="true">{sortKey===h&&(sortDir==="asc"?"▲":"▼")}</span></th>
                         ))}</tr>
                       </thead>
                       <tbody className="divide-y divide-stone-100">
@@ -887,9 +892,9 @@ export default function App(){
                     <label className="sr-only" htmlFor="page-size">Rows per page</label>
                     <select id="page-size" aria-label="Rows per page" value={pageSize} onChange={e=>setPageSize(Number(e.target.value))} className="px-2 py-1.5 rounded-xl border border-stone-200 bg-white text-xs focus-visible:ring-2 focus-visible:ring-violet-500"><option value={10}>10 / page</option><option value={25}>25 / page</option><option value={50}>50 / page</option><option value={100}>100 / page</option></select>
                     <button onClick={()=>{
-                      const ws=XLSX.utils.json_to_sheet(filtered); const csv=XLSX.utils.sheet_to_csv(ws); const blob=new Blob([csv],{type:"text/csv"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=`sheetly-${reportingMonth}-${reportingYear}.csv`; a.click(); URL.revokeObjectURL(url)
-                    }} className="px-3 py-1.5 rounded-xl bg-violet-600 text-white text-xs font-semibold">Export CSV</button>
-                    <button onClick={()=>window.print()} className="px-3 py-1.5 rounded-xl border border-stone-200 bg-white text-xs font-medium">Print</button>
+                      try{ const ws=XLSX.utils.json_to_sheet(filtered); const csv=XLSX.utils.sheet_to_csv(ws); const blob=new Blob([csv],{type:"text/csv"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=`sheetly-${reportingMonth}-${reportingYear}.csv`; a.click(); URL.revokeObjectURL(url); setToast(`Exported ${fmt(filtered.length)} rows to CSV`) } catch{ setToast("Export failed") }
+                    }} className="px-3 py-1.5 rounded-xl bg-violet-600 text-white text-xs font-semibold hover:bg-violet-700 focus-visible:ring-2 focus-visible:ring-violet-500">Export CSV</button>
+                    <button onClick={()=>window.print()} className="px-3 py-1.5 rounded-xl border border-stone-200 bg-white text-xs font-medium hover:bg-stone-50 focus-visible:ring-2 focus-visible:ring-violet-500">Print</button>
                   </div>
                 </div>
 
@@ -938,13 +943,13 @@ export default function App(){
                       </div>
                     </details>
                   </div>
-                  <div className="overflow-auto max-h-[560px]">
+                  <div tabIndex={0} role="region" aria-label="Detailed data table, scroll to see more" className="overflow-auto max-h-[560px] focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-inset outline-none">
                     <table className="w-full text-sm">
                       <thead className="sticky top-0 bg-stone-50 border-b border-stone-200"><tr>{displayedHeaders.map(h=>(
                         <th key={h} scope="col" tabIndex={0} role="button" aria-sort={sortKey===h ? (sortDir==="asc" ? "ascending" : "descending") : "none"} aria-label={`${h}, sortable, ${sortKey===h ? `sorted ${sortDir==="asc"?"ascending":"descending"}` : "not sorted"}. Press Enter to sort.`} onClick={()=>{ if(sortKey===h) setSortDir(d=>d==="asc"?"desc":"asc"); else {setSortKey(h); setSortDir("asc")}}} onKeyDown={e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); if(sortKey===h) setSortDir(d=>d==="asc"?"desc":"asc"); else {setSortKey(h); setSortDir("asc")} } }} className="text-left px-3 py-2.5 font-semibold cursor-pointer whitespace-nowrap hover:bg-stone-100 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-500 outline-none">{h} <span aria-hidden="true">{sortKey===h&&(sortDir==="asc"?"▲":"▼")}</span></th>
                       ))}</tr></thead>
                       <tbody className="divide-y divide-stone-100">
-                        {paged.length===0? <tr><td colSpan={displayedHeaders.length} className="text-center py-12 text-stone-600">No rows match “{deferredSearch}”</td></tr> : paged.map((r,i)=>(
+                        {paged.length===0? <tr><td colSpan={displayedHeaders.length} className="text-center py-12"><div className="mx-auto max-w-sm"><div className="size-10 mx-auto rounded-full bg-stone-100 grid place-items-center text-stone-600">∅</div><div className="mt-2 font-semibold text-stone-700">No rows match</div><div className="text-xs text-stone-600 mt-1 truncate px-4">“{String(deferredSearch).slice(0,60)}” — try clearing search or filters</div><button onClick={()=>{setSearch(""); setSchoolFilter("All Schools")}} className="mt-3 text-xs font-semibold px-3 py-1.5 rounded-full border border-stone-200 bg-white hover:bg-stone-50">Clear filters</button></div></td></tr> : paged.map((r,i)=>(
                           <tr key={i} className="hover:bg-stone-50">
                             {displayedHeaders.map(h=>{
                               const v=cleanValue(r[h]); const t=columnTypes[h]
@@ -984,6 +989,7 @@ export default function App(){
         )}
       </main>
 
+      {toast && <div role="status" aria-live="polite" className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-stone-900 text-white text-sm font-medium px-4 py-2.5 rounded-full shadow-xl z-50">{toast}</div>}
       <footer className="border-t border-stone-200 mt-8 py-6 text-center text-xs text-stone-600">
         Sheetly • Monthly Visual Report System • Data → Information → Visualization → Insight • Print hides controls • All local
       </footer>
