@@ -3,6 +3,17 @@
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --radius-card: 1rem;
+  --radius-pill: 9999px;
+  --color-brand: #7c3aed;
+  --color-brand-soft: #ede9ff;
+}
+
+html { font-size: 16px; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
 
 * { scrollbar-width: thin; scrollbar-color: #e7e5e4 transparent; }
@@ -20,6 +31,11 @@ button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible
   outline-offset: 2px;
   box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.15);
 }
+
+/* Consistent transitions — respects reduced-motion via media query above */
+button, a, select, input { transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease, transform 150ms ease; }
+button:active:not(:disabled) { transform: scale(0.98); }
+button:disabled { cursor: not-allowed; }
 
 @media print {
   header, .no-print { display: none !important; }

@@ -418,7 +418,7 @@ export default function App(){
                 <div className="mt-8 grid grid-cols-3 gap-3 max-w-[560px]">
                   {[{k:"Dashboard",v:"KPI + Trend",s:"5 KPIs, Δ vs prev"},{k:"School",v:"Top 10",s:"filterable ranking"},{k:"Quality",v:"Validation",s:"9 checks"}].map(x=>(
                     <div key={x.k} className="bg-white border border-stone-200 rounded-2xl p-3 shadow-sm">
-                      <div className="text-[10px] tracking-widest uppercase font-bold text-stone-600">{x.k}</div>
+                      <div className="text-[11px] tracking-widest uppercase font-bold text-stone-600">{x.k}</div>
                       <div className="text-[15px] font-bold text-stone-900 mt-1">{x.v}</div>
                       <div className="text-xs text-stone-600">{x.s}</div>
                     </div>
@@ -526,7 +526,7 @@ export default function App(){
                       {label:"Total Downloads", value:fmtCompact(schoolKPIs.totalDownloads), sub:`avg ${fmt(Math.round(schoolKPIs.avgDownloads))} • max ${fmtCompact(schoolKPIs.maxDownloads)}`, delta: comparison? `${comparison.downloadsChange>0?"▲":"▼"} ${Math.abs(comparison.downloadsChange).toFixed(1)}% vs Aug`:"auto", color:"from-fuchsia-600 to-pink-500"},
                     ].map(k=>(
                       <div key={k.label} className="bg-white border border-stone-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition min-w-0">
-                        <div className="text-[10px] font-bold tracking-[0.14em] uppercase text-stone-600 truncate">{k.label}</div>
+                        <div className="text-[11px] font-bold tracking-[0.14em] uppercase text-stone-600 truncate">{k.label}</div>
                         <div className="text-[24px] font-extrabold tracking-tight text-stone-900 leading-none mt-2 truncate">{k.value}</div>
                         <div className="text-xs text-stone-600 mt-1 truncate">{k.sub}</div>
                         <div className={`mt-2 inline-flex text-[11px] font-bold rounded-full px-2.5 py-1 bg-gradient-to-br ${k.color} text-white shadow max-w-full truncate`}>{k.delta}</div>
@@ -544,7 +544,7 @@ export default function App(){
                       {label:"Total Downloads", value:fmt(userKPIs.totalDownloads), sub:`avg ${(userKPIs.totalDownloads/userKPIs.totalUsers).toFixed(1)}/user`, delta:`max ${Math.max(...filtered.map(r=>toNumber(r["TOTAL DOWNLOADS"])??0))}`},
                     ].map(k=>(
                       <div key={k.label} className="bg-white border border-stone-200 rounded-2xl p-4 shadow-sm">
-                        <div className="text-[10px] font-bold tracking-widest uppercase text-stone-600">{k.label}</div>
+                        <div className="text-[11px] font-bold tracking-widest uppercase text-stone-600">{k.label}</div>
                         <div className="text-[24px] font-extrabold text-stone-900 mt-2">{k.value}</div>
                         <div className="text-xs text-stone-600 mt-1 truncate">{k.sub}</div>
                         <div className="mt-2 text-[11px] font-semibold bg-violet-50 text-violet-700 border border-violet-200 rounded-full px-2 py-1 inline-flex truncate max-w-full">{k.delta}</div>
@@ -554,9 +554,9 @@ export default function App(){
                 )}
                 {!loading && datasetType==="generic" && (
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                    <div className="bg-white border border-stone-200 rounded-2xl p-4"><div className="text-[10px] font-bold tracking-widest uppercase text-stone-600">Rows</div><div className="text-2xl font-extrabold mt-1">{fmt(filtered.length)}</div><div className="text-xs text-stone-600">of {fmt(active?.rows.length??0)} total</div></div>
+                    <div className="bg-white border border-stone-200 rounded-2xl p-4"><div className="text-[11px] font-bold tracking-widest uppercase text-stone-600">Rows</div><div className="text-2xl font-extrabold mt-1">{fmt(filtered.length)}</div><div className="text-xs text-stone-600">of {fmt(active?.rows.length??0)} total</div></div>
                     {genericSummary.map(s=>(
-                      <div key={s.col} className="bg-white border border-stone-200 rounded-2xl p-4"><div className="text-[10px] font-bold tracking-widest uppercase text-stone-600">{s.col}</div><div className="text-xl font-extrabold mt-1">{fmtCompact(Math.round(s.sum))}</div><div className="text-xs text-stone-600">avg {fmt(Math.round(s.avg))} • max {fmt(s.max)}</div></div>
+                      <div key={s.col} className="bg-white border border-stone-200 rounded-2xl p-4"><div className="text-[11px] font-bold tracking-widest uppercase text-stone-600">{s.col}</div><div className="text-xl font-extrabold mt-1">{fmtCompact(Math.round(s.sum))}</div><div className="text-xs text-stone-600">avg {fmt(Math.round(s.avg))} • max {fmt(s.max)}</div></div>
                     ))}
                   </div>
                 )}
@@ -916,7 +916,7 @@ export default function App(){
                       <div className="divide-y divide-stone-100">
                         {validationItems.map(v=>(
                           <div key={v.label} className="flex items-center justify-between px-4 py-2 text-xs">
-                            <span className="flex items-center gap-2"><span className={`size-5 rounded-full grid place-items-center text-[10px] font-bold ${v.ok?"bg-emerald-500 text-white":"bg-amber-500 text-white"}`}>{v.ok?"✓":"!"}</span><span className="font-medium text-stone-700">{v.label}</span></span>
+                            <span className="flex items-center gap-2"><span className={`size-5 rounded-full grid place-items-center text-[11px] font-bold ${v.ok?"bg-emerald-500 text-white":"bg-amber-500 text-white"}`}>{v.ok?"✓":"!"}</span><span className="font-medium text-stone-700">{v.label}</span></span>
                             <span className={`font-mono ${v.ok?"text-stone-600":"text-amber-700 font-semibold"}`}>{v.detail}</span>
                           </div>
                         ))}
@@ -936,7 +936,7 @@ export default function App(){
                           <label key={h} className="flex items-center gap-2 px-2 py-1.5 hover:bg-stone-50 rounded-xl text-sm cursor-pointer">
                             <input type="checkbox" checked={displayedHeaders.includes(h)} onChange={e=> setVisibleCols(prev=>{
                               const cur=prev??active.headers; return e.target.checked? [...cur,h] : cur.filter(x=>x!==h)
-                            })}/><span className="truncate">{h}</span><span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full border bg-stone-50">{columnTypes[h]==="number"?"#":columnTypes[h]==="percent"?"%":columnTypes[h]==="date"?"📅":"Aa"}</span>
+                            })}/><span className="truncate">{h}</span><span className="ml-auto text-[11px] px-1.5 py-0.5 rounded-full border bg-stone-50">{columnTypes[h]==="number"?"#":columnTypes[h]==="percent"?"%":columnTypes[h]==="date"?"📅":"Aa"}</span>
                           </label>
                         ))}
                         <button onClick={()=>setVisibleCols(active?.headers??null)} className="w-full mt-2 text-xs font-bold bg-stone-900 text-white rounded-full py-1.5">Reset</button>
