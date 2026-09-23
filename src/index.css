@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+* { scrollbar-width: thin; scrollbar-color: #e7e5e4 transparent; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: #e7e5e4; border-radius: 999px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+@media print {
+  header, .no-print { display: none !important; }
+  main { padding: 0 !important; }
+}
