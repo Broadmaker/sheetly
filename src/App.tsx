@@ -59,7 +59,7 @@ function parseWorkbook(file:File):Promise<WorkbookData>{
 function Tip({active,payload,label}:any){
   if(!active||!payload?.length) return null
   return (
-    <div className="bg-stone-900 text-white text-xs rounded-xl px-3 py-2 shadow-xl border border-stone-800 max-w-[300px]">
+    <div className="bg-slate-900 text-white text-xs rounded-xl px-3 py-2 shadow-xl border border-slate-800 max-w-[300px]">
       <div className="font-semibold truncate">{label ?? payload[0]?.name ?? payload[0]?.payload?.name}</div>
       {payload.map((p:any,i:number)=>(
         <div key={i} className="flex items-center gap-2 mt-0.5">
@@ -291,63 +291,64 @@ export default function App(){
   },[active,datasetType])
 
   return (
-    <div className="min-h-screen bg-[#fcfcf9] text-stone-700 selection:bg-violet-200">
-      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:bg-stone-900 focus:text-white focus:rounded-full focus:text-sm focus:font-semibold">Skip to main content</a>
-      <header className="sticky top-0 z-30 backdrop-blur-xl bg-[#fcfcf9]/95 border-b border-stone-200/70">
+    <div className="min-h-screen bg-slate-50 text-slate-700 selection:bg-indigo-200">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:bg-slate-900 focus:text-white focus:rounded-full focus:text-sm focus:font-semibold">Skip to main content</a>
+      <header className="sticky top-0 z-30 backdrop-blur-xl bg-slate-50/95 border-b border-slate-200/70">
         <div className="max-w-[1440px] mx-auto px-4 sm:px-6 h-[62px] flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="size-9 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-500 grid place-items-center text-white font-black text-sm shadow-lg shadow-violet-600/20">LR</div>
+            <div className="size-9 rounded-xl bg-gradient-to-br from-indigo-600 to-blue-500 grid place-items-center text-white font-black text-sm shadow-lg shadow-indigo-600/20">LR</div>
             <div className="leading-none">
-              <div className="font-bold tracking-tight text-stone-900 text-[16px] sm:text-[17px]">LEARNING RESOURCE PORTAL</div>
-              <div className="text-[11px] font-semibold tracking-[0.16em] uppercase text-stone-600">Monthly Visual Report</div>
+              <div className="font-bold tracking-tight text-slate-900 text-[16px] sm:text-[17px]">LEARNING RESOURCE PORTAL</div>
+              <div className="text-[11px] font-semibold tracking-[0.16em] uppercase text-slate-600">Monthly Visual Report</div>
             </div>
-            {wb && <span className="hidden xl:inline-flex ml-4 items-center gap-2 text-xs bg-white border border-stone-200 rounded-full px-3 py-1.5 shadow-sm"><span className="size-2 rounded-full bg-emerald-500 animate-pulse"/><span className="font-medium truncate max-w-[220px]">{wb.fileName}</span><span className="text-stone-600">•</span><span>{fmt(filtered.length)} rows</span><span className="text-stone-600">•</span><span className="capitalize">{datasetType}</span></span>}
+            {wb && <span className="hidden xl:inline-flex ml-4 items-center gap-2 text-xs bg-white border border-slate-200 rounded-full px-3 py-1.5 shadow-sm"><span className="size-2 rounded-full bg-emerald-500 animate-pulse"/><span className="font-medium truncate max-w-[220px]">{wb.fileName}</span><span className="text-slate-600">•</span><span>{fmt(filtered.length)} rows</span><span className="text-slate-600">•</span><span className="capitalize">{datasetType}</span></span>}
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={()=>setLargeText(v=>!v)} aria-pressed={largeText} title="Toggle larger text for easier reading" className={`text-sm font-semibold px-3.5 py-2 rounded-full border transition focus-visible:ring-2 focus-visible:ring-violet-500 ${largeText?"bg-violet-600 text-white border-violet-600":"border-stone-200 bg-white hover:bg-stone-50"}`}>Aa {largeText?"Large":"Normal"}</button>`n            <button onClick={()=>setView("admin")} className={`text-sm font-semibold px-3.5 py-2 rounded-full border transition focus-visible:ring-2 focus-visible:ring-violet-500 ${view==="admin"?"bg-stone-900 text-white border-stone-900":"border-stone-200 bg-white hover:bg-stone-50"}`}>Admin</button>
+            <button onClick={()=>setLargeText(v=>!v)} aria-pressed={largeText} title="Toggle larger text for easier reading" className={`text-sm font-semibold px-3.5 py-2 rounded-full border transition focus-visible:ring-2 focus-visible:ring-indigo-500 ${largeText?"bg-indigo-600 text-white border-indigo-600":"border-slate-200 bg-white hover:bg-slate-50"}`}>Aa {largeText?"Large":"Normal"}</button>
+            <button onClick={()=>setView("admin")} className={`text-sm font-semibold px-3.5 py-2 rounded-full border transition focus-visible:ring-2 focus-visible:ring-indigo-500 ${view==="admin"?"bg-slate-900 text-white border-slate-900":"border-slate-200 bg-white hover:bg-slate-50"}`}>Admin</button>
             {wb?(
               <>
                 <div className="hidden lg:flex items-center gap-2 text-xs">
                   <label className="sr-only" htmlFor="reporting-month-header">Reporting month</label>
-                  <select id="reporting-month-header" aria-label="Reporting month" value={reportingMonth} onChange={e=>setReportingMonth(e.target.value)} className="px-2.5 py-2 rounded-full border border-stone-200 bg-white font-medium focus-visible:ring-2 focus-visible:ring-violet-500">
+                  <select id="reporting-month-header" aria-label="Reporting month" value={reportingMonth} onChange={e=>setReportingMonth(e.target.value)} className="px-2.5 py-2 rounded-full border border-slate-200 bg-white font-medium focus-visible:ring-2 focus-visible:ring-indigo-500">
                     {MONTHS.map(m=><option key={m} value={m}>{m}</option>)}
                   </select>
                   <label className="sr-only" htmlFor="reporting-year-header">Reporting year</label>
-                  <select id="reporting-year-header" aria-label="Reporting year" value={reportingYear} onChange={e=>setReportingYear(e.target.value)} className="px-2.5 py-2 rounded-full border border-stone-200 bg-white font-medium focus-visible:ring-2 focus-visible:ring-violet-500">
+                  <select id="reporting-year-header" aria-label="Reporting year" value={reportingYear} onChange={e=>setReportingYear(e.target.value)} className="px-2.5 py-2 rounded-full border border-slate-200 bg-white font-medium focus-visible:ring-2 focus-visible:ring-indigo-500">
                     <option>2024</option><option>2025</option><option>2026</option>
                   </select>
                 </div>
-                <button onClick={()=>{setWb(null); setSourceFile(null)}} className="hidden sm:inline-flex text-sm font-medium px-3.5 py-2 rounded-full border border-stone-200 bg-white hover:bg-stone-50 focus-visible:ring-2 focus-visible:ring-violet-500">New file</button>
-                <button onClick={()=>window.print()} className="inline-flex text-sm font-semibold px-4 py-2 rounded-full bg-stone-900 text-white hover:bg-stone-800 shadow focus-visible:ring-2 focus-visible:ring-violet-500">Print / PDF</button>
+                <button onClick={()=>{setWb(null); setSourceFile(null)}} className="hidden sm:inline-flex text-sm font-medium px-3.5 py-2 rounded-full border border-slate-200 bg-white hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-indigo-500">New file</button>
+                <button onClick={()=>window.print()} className="inline-flex text-sm font-semibold px-4 py-2 rounded-full bg-slate-900 text-white hover:bg-slate-800 shadow focus-visible:ring-2 focus-visible:ring-indigo-500">Print / PDF</button>
               </>
             ):(
-              <span className="hidden sm:inline-flex text-xs font-medium text-stone-600 bg-white border border-stone-200 rounded-full px-3 py-1.5">Local-only • No upload</span>
+              <span className="hidden sm:inline-flex text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-full px-3 py-1.5">Local-only • No upload</span>
             )}
           </div>
         </div>
         {wb && (
-          <nav aria-label="Report sections" className="max-w-[1440px] mx-auto px-4 sm:px-6 flex flex-wrap items-center gap-2 py-2.5 border-t border-stone-100">
-            <div role="tablist" aria-label="Report views" className="flex items-center gap-1.5 bg-white border border-stone-200 rounded-full p-1 shadow-sm">
+          <nav aria-label="Report sections" className="max-w-[1440px] mx-auto px-4 sm:px-6 flex flex-wrap items-center gap-2 py-2.5 border-t border-slate-100">
+            <div role="tablist" aria-label="Report views" className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-full p-1 shadow-sm">
               {(["dashboard","school","users","comparison","trends","data","admin"] as View[]).map(v=>(
-                <button key={v} role="tab" aria-selected={view===v} aria-controls={`panel-${v}`} id={`tab-${v}`} onClick={()=>setView(v)} className={`px-4 py-2 rounded-full text-sm font-bold capitalize tracking-wide transition focus-visible:ring-2 focus-visible:ring-violet-500 ${view===v?"bg-stone-900 text-white shadow":"text-stone-600 hover:bg-stone-50"}`}>
+                <button key={v} role="tab" aria-selected={view===v} aria-controls={`panel-${v}`} id={`tab-${v}`} onClick={()=>setView(v)} className={`px-4 py-2 rounded-full text-sm font-bold capitalize tracking-wide transition focus-visible:ring-2 focus-visible:ring-indigo-500 ${view===v?"bg-slate-900 text-white shadow":"text-slate-600 hover:bg-slate-50"}`}>
                   {v==="dashboard"?"Dashboard":v==="school"?"School Analysis":v==="users"?"User Analysis":v==="comparison"?"School Comparison":v==="trends"?"Snapshot History":v==="admin"?"Admin":"Detailed Data"}
                 </button>
               ))}
             </div>
             <div className="flex items-center gap-2 ml-2 w-full md:w-auto mt-2 md:mt-0">
-              <label htmlFor="school-filter" className="text-xs font-semibold text-stone-600 shrink-0">SCHOOL</label>
-              <select id="school-filter" aria-label="Filter by school" value={schoolFilter} onChange={e=>setSchoolFilter(e.target.value)} className="flex-1 md:flex-none px-3 py-1.5 rounded-full border border-stone-200 bg-white text-xs font-medium max-w-[220px] focus-visible:ring-2 focus-visible:ring-violet-500">
+              <label htmlFor="school-filter" className="text-xs font-semibold text-slate-600 shrink-0">SCHOOL</label>
+              <select id="school-filter" aria-label="Filter by school" value={schoolFilter} onChange={e=>setSchoolFilter(e.target.value)} className="flex-1 md:flex-none px-3 py-1.5 rounded-full border border-slate-200 bg-white text-xs font-medium max-w-[220px] focus-visible:ring-2 focus-visible:ring-indigo-500">
                 {schoolOptions.map(o=><option key={o} value={o}>{o}</option>)}
               </select>
             </div>
             <div className="flex items-center gap-2 w-full md:w-auto">
-              <label htmlFor="global-search" className="text-xs font-semibold text-stone-600 shrink-0">SEARCH</label>
+              <label htmlFor="global-search" className="text-xs font-semibold text-slate-600 shrink-0">SEARCH</label>
               <div className="relative flex-1 md:flex-none">
-                <input id="global-search" type="search" aria-label="Search schools, users or IDs" value={search} onChange={e=>setSearch(e.target.value)} placeholder="School, user, ID…" className="w-full md:w-[200px] pl-7 pr-2 py-1.5 rounded-full border border-stone-200 bg-stone-50 focus:bg-white focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 outline-none text-xs"/>
-                <span aria-hidden="true" className="absolute left-2.5 top-1.5 text-stone-600 text-xs">⌕</span>
+                <input id="global-search" type="search" aria-label="Search schools, users or IDs" value={search} onChange={e=>setSearch(e.target.value)} placeholder="School, user, ID…" className="w-full md:w-[200px] pl-7 pr-2 py-1.5 rounded-full border border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none text-xs"/>
+                <span aria-hidden="true" className="absolute left-2.5 top-1.5 text-slate-600 text-xs">⌕</span>
               </div>
             </div>
-            <div className="ml-auto hidden lg:flex items-center gap-2 text-[11px] text-stone-600">
+            <div className="ml-auto hidden lg:flex items-center gap-2 text-[11px] text-slate-600">
               <span aria-hidden="true" className="size-1.5 rounded-full bg-emerald-500"/>{active?.headers.length} cols • {metricCols.length} metrics • {lastUpdated}
             </div>
           </nav>
@@ -363,19 +364,19 @@ export default function App(){
           <div className="space-y-8">
             <div className="grid lg:grid-cols-[1.05fr_0.95fr] gap-6 sm:gap-8 items-start">
               <div className="pt-2 sm:pt-4">
-                <div className="inline-flex items-center gap-2 text-xs font-semibold tracking-widest uppercase bg-white border border-stone-200 rounded-full px-3 py-1.5 shadow-sm"><span className="size-2 rounded-full bg-violet-600"/> Monthly Visual Report System • Sept 2026</div>
-                <h1 className="mt-4 text-[30px] sm:text-[40px] font-extrabold tracking-tight leading-[0.95] text-stone-900">Monthly <span className="bg-gradient-to-br from-violet-600 to-orange-500 bg-clip-text text-transparent">Visual Monitoring</span> for LR Portal</h1>
-                <p className="mt-4 text-[14.5px] leading-6 text-stone-600 max-w-[620px]">Drop your <b className="text-stone-900">Utilization</b> or <b className="text-stone-900">Registered Users</b> Excel — get the spec Dashboard with 5 KPIs, rankings, activity distribution, validation & quality checks. All local.</p>
+                <div className="inline-flex items-center gap-2 text-xs font-semibold tracking-widest uppercase bg-white border border-slate-200 rounded-full px-3 py-1.5 shadow-sm"><span className="size-2 rounded-full bg-indigo-600"/> Monthly Visual Report System • Sept 2026</div>
+                <h1 className="mt-4 text-[30px] sm:text-[40px] font-extrabold tracking-tight leading-[0.95] text-slate-900">Monthly <span className="bg-gradient-to-br from-indigo-600 to-blue-500 bg-clip-text text-transparent">Visual Monitoring</span> for LR Portal</h1>
+                <p className="mt-4 text-[14.5px] leading-6 text-slate-600 max-w-[620px]">Drop your <b className="text-slate-900">Utilization</b> or <b className="text-slate-900">Registered Users</b> Excel — get the spec Dashboard with 5 KPIs, rankings, activity distribution, validation & quality checks. All local.</p>
                 <div className="mt-6 flex flex-wrap gap-2">
-                  <a href="#samples" className="inline-flex items-center gap-2 text-sm font-semibold bg-stone-900 text-white px-4 py-2.5 rounded-full hover:bg-stone-800">Try a sample ↓</a>
-                  <span className="inline-flex items-center gap-2 text-xs text-stone-600 bg-white border border-stone-200 rounded-full px-3 py-2">XLSX via SheetJS • Recharts</span>
+                  <a href="#samples" className="inline-flex items-center gap-2 text-sm font-semibold bg-slate-900 text-white px-4 py-2.5 rounded-full hover:bg-slate-800">Try a sample ↓</a>
+                  <span className="inline-flex items-center gap-2 text-xs text-slate-600 bg-white border border-slate-200 rounded-full px-3 py-2">XLSX via SheetJS • Recharts</span>
                 </div>
                 <div className="mt-8 grid grid-cols-3 gap-3 max-w-[560px]">
                   {[{k:"Dashboard",v:"KPI cards",s:"current snapshot"},{k:"School",v:"Top 10",s:"filterable ranking"},{k:"Quality",v:"Validation",s:"9 checks"}].map(x=>(
-                    <div key={x.k} className="bg-white border border-stone-200 rounded-2xl p-3 shadow-sm">
-                      <div className="text-[11px] tracking-widest uppercase font-bold text-stone-600">{x.k}</div>
-                      <div className="text-[15px] font-bold text-stone-900 mt-1">{x.v}</div>
-                      <div className="text-xs text-stone-600">{x.s}</div>
+                    <div key={x.k} className="bg-white border border-slate-200 rounded-2xl p-3 shadow-sm">
+                      <div className="text-[11px] tracking-widest uppercase font-bold text-slate-600">{x.k}</div>
+                      <div className="text-[15px] font-bold text-slate-900 mt-1">{x.v}</div>
+                      <div className="text-xs text-slate-600">{x.s}</div>
                     </div>
                   ))}
                 </div>
@@ -391,32 +392,32 @@ export default function App(){
                 onDrop={handleDrop}
                 onKeyDown={e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); fileRef.current?.click() } }}
                 onClick={()=>fileRef.current?.click()}
-                className={`relative bg-white rounded-[24px] border-2 shadow-xl shadow-stone-900/5 p-6 sm:p-7 flex flex-col gap-5 cursor-pointer focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 outline-none ${drag?"border-violet-500 bg-violet-50/50":"border-stone-200"}`}>
+                className={`relative bg-white rounded-[24px] border-2 shadow-xl shadow-slate-900/5 p-6 sm:p-7 flex flex-col gap-5 cursor-pointer focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 outline-none ${drag?"border-indigo-500 bg-indigo-50/50":"border-slate-200"}`}>
                 <div className="flex items-start justify-between gap-4">
-                  <div aria-hidden="true" className="size-12 rounded-2xl bg-violet-600 grid place-items-center text-white text-xl shadow-lg shadow-violet-600/20">📊</div>
-                  <span className="text-[11px] font-semibold tracking-widest uppercase bg-stone-900 text-white px-2.5 py-1 rounded-full">Offline • Private</span>
+                  <div aria-hidden="true" className="size-12 rounded-2xl bg-indigo-600 grid place-items-center text-white text-xl shadow-lg shadow-indigo-600/20">📊</div>
+                  <span className="text-[11px] font-semibold tracking-widest uppercase bg-slate-900 text-white px-2.5 py-1 rounded-full">Offline • Private</span>
                 </div>
-                <div><div className="text-lg font-bold text-stone-900">{drag?"Drop to parse ✨":"Drop Excel here"}</div><div id="dropzone-help" className="text-sm text-stone-600 mt-1 leading-relaxed">Supports <b className="text-stone-700">.xls/.xlsx/.csv</b> up to 25 MB. Empty columns auto-removed, ID columns excluded from sums.</div></div>
+                <div><div className="text-lg font-bold text-slate-900">{drag?"Drop to parse ✨":"Drop Excel here"}</div><div id="dropzone-help" className="text-sm text-slate-600 mt-1 leading-relaxed">Supports <b className="text-slate-700">.xls/.xlsx/.csv</b> up to 25 MB. Empty columns auto-removed, ID columns excluded from sums.</div></div>
                 <div className="flex gap-2">
-                  <button onClick={e=>{e.stopPropagation(); fileRef.current?.click()}} disabled={loading} aria-busy={loading} className="flex-1 py-3 rounded-xl bg-violet-600 text-white font-semibold text-sm hover:bg-violet-700 disabled:opacity-60 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-violet-500 cursor-pointer">{loading?"Parsing…":"Choose file"}</button>
-                  <button onClick={e=>{e.stopPropagation(); document.getElementById("samples")?.scrollIntoView({behavior:"smooth"})}} className="px-4 py-3 rounded-xl border border-stone-200 bg-white text-sm font-medium hover:bg-stone-50 focus-visible:ring-2 focus-visible:ring-violet-500">Samples</button>
+                  <button onClick={e=>{e.stopPropagation(); fileRef.current?.click()}} disabled={loading} aria-busy={loading} className="flex-1 py-3 rounded-xl bg-indigo-600 text-white font-semibold text-sm hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-indigo-500 cursor-pointer">{loading?"Parsing…":"Choose file"}</button>
+                  <button onClick={e=>{e.stopPropagation(); document.getElementById("samples")?.scrollIntoView({behavior:"smooth"})}} className="px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm font-medium hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-indigo-500">Samples</button>
                 </div>
-                <div className="rounded-xl bg-stone-50 border border-stone-200 p-3 text-xs leading-5 text-stone-600">Tip: <b className="text-stone-900">Month</b> + <b className="text-stone-900">School</b> filters affect every KPI & chart.</div>
+                <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 text-xs leading-5 text-slate-600">Tip: <b className="text-slate-900">Month</b> + <b className="text-slate-900">School</b> filters affect every KPI & chart.</div>
                 <input ref={fileRef} type="file" accept=".xls,.xlsx,.csv" tabIndex={-1} aria-hidden="true" hidden onChange={e=>{const f=e.target.files?.[0]; if(f) loadFile(f)}}/>
-                {drag&&<div aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-[24px] border-2 border-dashed border-violet-500 bg-violet-500/5"/>}
+                {drag&&<div aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-[24px] border-2 border-dashed border-indigo-500 bg-indigo-500/5"/>}
                 <span aria-live="polite" className="sr-only">{drag ? "Release to upload file" : ""}{loading ? "Parsing file" : ""}</span>
               </div>
             </div>
             <div id="samples" className="scroll-mt-20">
-              <h2 className="text-sm font-bold text-stone-900">Try a sample file</h2>
+              <h2 className="text-sm font-bold text-slate-900">Try a sample file</h2>
               <div className="mt-3 grid md:grid-cols-2 gap-4">
                 {[
                   {title:"LR Portal — Utilization", file:"/samples/sample-utilization.xls", name:"LR Portal Utilization.xls", desc:"498 schools • Zamboanga Sibugay • Downloads, participation", meta:"498 rows • 6 cols", accent:"from-orange-500 to-amber-500", icon:"🏫"},
-                  {title:"LR Portal — Registered Users", file:"/samples/sample-registered.xls", name:"LR Portal Registered Users.xls", desc:"7 users • Gender, Role, Downloads, Registered date", meta:"7 rows • 10 cols", accent:"from-violet-600 to-indigo-500", icon:"👥"},
+                  {title:"LR Portal — Registered Users", file:"/samples/sample-registered.xls", name:"LR Portal Registered Users.xls", desc:"7 users • Gender, Role, Downloads, Registered date", meta:"7 rows • 10 cols", accent:"from-indigo-600 to-blue-500", icon:"👥"},
                 ].map(c=>(
-                  <button key={c.file} onClick={()=>loadSample(c.file,c.name)} className="text-left bg-white border border-stone-200 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-stone-300 flex gap-4">
+                  <button key={c.file} onClick={()=>loadSample(c.file,c.name)} className="text-left bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-slate-300 flex gap-4">
                     <div className={`size-12 rounded-2xl bg-gradient-to-br ${c.accent} grid place-items-center text-white`}>{c.icon}</div>
-                    <div className="flex-1 min-w-0"><div className="font-semibold text-stone-900">{c.title}</div><div className="text-xs text-stone-600 mt-1">{c.desc}</div><div className="mt-2 inline-flex text-[11px] font-medium bg-stone-900 text-white px-2.5 py-1 rounded-full">Load → <span className="opacity-60">{c.meta}</span></div></div>
+                    <div className="flex-1 min-w-0"><div className="font-semibold text-slate-900">{c.title}</div><div className="text-xs text-slate-600 mt-1">{c.desc}</div><div className="mt-2 inline-flex text-[11px] font-medium bg-slate-900 text-white px-2.5 py-1 rounded-full">Load → <span className="opacity-60">{c.meta}</span></div></div>
                   </button>
                 ))}
               </div>
@@ -428,8 +429,8 @@ export default function App(){
                 {t:"Validation",d:"9 checks before presenting"},
                 {t:"Quality",d:"Complete / missing / dup / status"},
               ].map(f=>(
-                <div key={f.t} className="bg-white border border-stone-200 rounded-2xl p-4 shadow-sm">
-                  <div className="font-semibold text-sm text-stone-900">{f.t}</div><div className="text-xs text-stone-600 mt-1">{f.d}</div>
+                <div key={f.t} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                  <div className="font-semibold text-sm text-slate-900">{f.t}</div><div className="text-xs text-slate-600 mt-1">{f.d}</div>
                 </div>
               ))}
             </div>
@@ -437,53 +438,53 @@ export default function App(){
         ):(
           <div className="space-y-5">
             {/* Dashboard Header per spec section 3.1 */}
-            <div className="bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden">
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
               <div className="px-5 sm:px-7 py-5 flex flex-wrap items-end justify-between gap-4">
                 <div>
-                  <div className="text-xs font-bold tracking-[0.18em] uppercase text-violet-600">Learning Resource Portal</div>
-                  <div className="text-[22px] sm:text-[26px] font-extrabold tracking-tight text-stone-900 leading-none mt-1">MONTHLY VISUAL REPORT</div>
-                  <div className="text-sm font-semibold text-stone-600 mt-2 flex flex-wrap items-center gap-2">
-                    <span className="bg-stone-900 text-white rounded-full px-3 py-1 text-xs">{reportingMonth} {reportingYear}</span>
-                    <span className="text-stone-600">•</span><span className="text-xs font-normal text-stone-600">Last Updated: {lastUpdated}</span>
-                    <span className={`text-xs px-2.5 py-1 rounded-full border font-semibold ${datasetType==="school"?"bg-emerald-50 text-emerald-700 border-emerald-200":datasetType==="user"?"bg-violet-50 text-violet-700 border-violet-200":"bg-stone-50 text-stone-600 border-stone-200"}`}>{datasetType==="school"?"School Utilization":datasetType==="user"?"User Records":"Generic"} • {active?.headers.length} fields</span>
+                  <div className="text-xs font-bold tracking-[0.18em] uppercase text-indigo-600">Learning Resource Portal</div>
+                  <div className="text-[22px] sm:text-[26px] font-extrabold tracking-tight text-slate-900 leading-none mt-1">MONTHLY VISUAL REPORT</div>
+                  <div className="text-sm font-semibold text-slate-600 mt-2 flex flex-wrap items-center gap-2">
+                    <span className="bg-slate-900 text-white rounded-full px-3 py-1 text-xs">{reportingMonth} {reportingYear}</span>
+                    <span className="text-slate-600">•</span><span className="text-xs font-normal text-slate-600">Last Updated: {lastUpdated}</span>
+                    <span className={`text-xs px-2.5 py-1 rounded-full border font-semibold ${datasetType==="school"?"bg-emerald-50 text-emerald-700 border-emerald-200":datasetType==="user"?"bg-indigo-50 text-indigo-700 border-indigo-200":"bg-slate-50 text-slate-600 border-slate-200"}`}>{datasetType==="school"?"School Utilization":datasetType==="user"?"User Records":"Generic"} • {active?.headers.length} fields</span>
                   </div>
                 </div>
                 <div className="hidden md:flex items-center gap-2">
                   <div className="text-right">
-                    <div className="text-[11px] font-bold tracking-widest uppercase text-stone-600">Reporting Period</div>
+                    <div className="text-[11px] font-bold tracking-widest uppercase text-slate-600">Reporting Period</div>
                     <div className="flex gap-1.5 mt-1">
                       <label className="sr-only" htmlFor="reporting-month-card">Reporting month</label>
-                      <select id="reporting-month-card" aria-label="Reporting month" value={reportingMonth} onChange={e=>setReportingMonth(e.target.value)} className="px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-violet-500">{MONTHS.map(m=><option key={m}>{m}</option>)}</select>
+                      <select id="reporting-month-card" aria-label="Reporting month" value={reportingMonth} onChange={e=>setReportingMonth(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-indigo-500">{MONTHS.map(m=><option key={m}>{m}</option>)}</select>
                       <label className="sr-only" htmlFor="reporting-year-card">Reporting year</label>
-                      <select id="reporting-year-card" aria-label="Reporting year" value={reportingYear} onChange={e=>setReportingYear(e.target.value)} className="px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-violet-500"><option>2024</option><option>2025</option><option>2026</option></select>
+                      <select id="reporting-year-card" aria-label="Reporting year" value={reportingYear} onChange={e=>setReportingYear(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-indigo-500"><option>2024</option><option>2025</option><option>2026</option></select>
                     </div>
                   </div>
                 </div>
               </div>
               <div className="px-5 sm:px-7 pb-4 flex flex-wrap gap-2 text-xs">
-                <span className="bg-stone-50 border border-stone-200 rounded-full px-3 py-1.5">Filters: <b>Month</b> {reportingMonth} • <b>School</b> {schoolFilter} • <b>Metric</b> {rankingMetric}</span>
-                <span className="bg-violet-50 border border-violet-200 text-violet-700 rounded-full px-3 py-1.5 hidden sm:inline">Search filters every chart + table • Print hides controls</span>
+                <span className="bg-slate-50 border border-slate-200 rounded-full px-3 py-1.5">Filters: <b>Month</b> {reportingMonth} • <b>School</b> {schoolFilter} • <b>Metric</b> {rankingMetric}</span>
+                <span className="bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-full px-3 py-1.5 hidden sm:inline">Search filters every chart + table • Print hides controls</span>
               </div>
             </div>
 
             {view==="dashboard" && (
               <div id="panel-dashboard" role="tabpanel" aria-labelledby="tab-dashboard" tabIndex={0} className="space-y-4 outline-none">
-                {loading && <div aria-busy="true" aria-live="polite" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">{[1,2,3,4,5].map(i=><div key={i} className="bg-white border border-stone-200 rounded-2xl p-4 animate-pulse"><div className="h-3 w-20 bg-stone-200 rounded-full"/><div className="h-8 w-24 bg-stone-200 rounded mt-3"/><div className="h-3 w-32 bg-stone-100 rounded mt-2"/></div>)}</div>}
-                {isSearchPending && !loading && <div role="status" aria-live="polite" className="text-xs text-violet-600 bg-violet-50 border border-violet-200 rounded-full px-3 py-1.5 inline-flex items-center gap-2"><span className="size-2 rounded-full bg-violet-600 animate-pulse"/>Searching…</div>}
+                {loading && <div aria-busy="true" aria-live="polite" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">{[1,2,3,4,5].map(i=><div key={i} className="bg-white border border-slate-200 rounded-2xl p-4 animate-pulse"><div className="h-3 w-20 bg-slate-200 rounded-full"/><div className="h-8 w-24 bg-slate-200 rounded mt-3"/><div className="h-3 w-32 bg-slate-100 rounded mt-2"/></div>)}</div>}
+                {isSearchPending && !loading && <div role="status" aria-live="polite" className="text-xs text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-full px-3 py-1.5 inline-flex items-center gap-2"><span className="size-2 rounded-full bg-indigo-600 animate-pulse"/>Searching…</div>}
                 {/* KPI row as per spec section 4 + change indicators */}
                 {!loading && datasetType==="school" && schoolKPIs && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                     {[
-                      {label:"Total Schools", value:fmt(schoolKPIs.totalSchools), sub: schoolFilter!=="All Schools"? `filtered of ${fmt(schoolKPIs.overall.totalSchools)}`:`all schools`, delta: schoolFilter!=="All Schools"?"filtered view":"current file", color:"from-violet-600 to-indigo-500"},
+                      {label:"Total Schools", value:fmt(schoolKPIs.totalSchools), sub: schoolFilter!=="All Schools"? `filtered of ${fmt(schoolKPIs.overall.totalSchools)}`:`all schools`, delta: schoolFilter!=="All Schools"?"filtered view":"current file", color:"from-indigo-600 to-blue-500"},
                       {label:"Registered Users", value:fmt(schoolKPIs.totalRegistered), sub:`active ${fmt(schoolKPIs.totalActual)} • avg ${fmt(Math.round(schoolKPIs.totalRegistered/schoolKPIs.totalSchools))}/school`, delta:"current file", color:"from-sky-500 to-cyan-500"},
                       {label:"Active / Actual Users", value:fmt(schoolKPIs.totalActual), sub:`${schoolKPIs.totalRegistered? ((schoolKPIs.totalActual/schoolKPIs.totalRegistered*100).toFixed(1)):"0"}% of registered`, delta: schoolKPIs.totalActual===0?"0 — check data":`${fmt(schoolKPIs.activeSchools)} active schools`, color:"from-emerald-500 to-teal-500"},
                       {label:"Participation Rate", value: schoolKPIs.avgParticipation.toFixed(1)+"%", sub: schoolKPIs.avgParticipation===0?"0% — all 0% in file":`overall participation`, delta:"current file", color:"from-amber-500 to-orange-500"},
                       {label:"Total Downloads", value:fmtCompact(schoolKPIs.totalDownloads), sub:`avg ${fmt(Math.round(schoolKPIs.avgDownloads))} • max ${fmtCompact(schoolKPIs.maxDownloads)}`, delta:"current file", color:"from-fuchsia-600 to-pink-500"},
                     ].map(k=>(
-                      <div key={k.label} className="bg-white border border-stone-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition min-w-0">
-                        <div className="text-[11px] font-bold tracking-[0.14em] uppercase text-stone-600 truncate">{k.label}</div>
-                        <div className="text-[24px] font-extrabold tracking-tight text-stone-900 leading-none mt-2 truncate">{k.value}</div>
-                        <div className="text-xs text-stone-600 mt-1 truncate">{k.sub}</div>
+                      <div key={k.label} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition min-w-0">
+                        <div className="text-[11px] font-bold tracking-[0.14em] uppercase text-slate-600 truncate">{k.label}</div>
+                        <div className="text-[24px] font-extrabold tracking-tight text-slate-900 leading-none mt-2 truncate">{k.value}</div>
+                        <div className="text-xs text-slate-600 mt-1 truncate">{k.sub}</div>
                         <div className={`mt-2 inline-flex text-[11px] font-bold rounded-full px-2.5 py-1 bg-gradient-to-br ${k.color} text-white shadow max-w-full truncate`}>{k.delta}</div>
                       </div>
                     ))}
@@ -498,66 +499,66 @@ export default function App(){
                       {label:"Users by Role", value:String(userKPIs.byRole.length), sub:userKPIs.byRole.slice(0,2).map(([n,c])=>`${n}:${c}`).join(" • "), delta: userKPIs.byGender.slice(0,2).map(([n,c])=>`${n} ${c}`).join(" • ")},
                       {label:"Total Downloads", value:fmt(userKPIs.totalDownloads), sub:`avg ${(userKPIs.totalDownloads/userKPIs.totalUsers).toFixed(1)}/user`, delta:`max ${Math.max(...filtered.map(r=>toNumber(r["TOTAL DOWNLOADS"])??0))}`},
                     ].map(k=>(
-                      <div key={k.label} className="bg-white border border-stone-200 rounded-2xl p-4 shadow-sm">
-                        <div className="text-[11px] font-bold tracking-widest uppercase text-stone-600">{k.label}</div>
-                        <div className="text-[24px] font-extrabold text-stone-900 mt-2">{k.value}</div>
-                        <div className="text-xs text-stone-600 mt-1 truncate">{k.sub}</div>
-                        <div className="mt-2 text-[11px] font-semibold bg-violet-50 text-violet-700 border border-violet-200 rounded-full px-2 py-1 inline-flex truncate max-w-full">{k.delta}</div>
+                      <div key={k.label} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                        <div className="text-[11px] font-bold tracking-widest uppercase text-slate-600">{k.label}</div>
+                        <div className="text-[24px] font-extrabold text-slate-900 mt-2">{k.value}</div>
+                        <div className="text-xs text-slate-600 mt-1 truncate">{k.sub}</div>
+                        <div className="mt-2 text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full px-2 py-1 inline-flex truncate max-w-full">{k.delta}</div>
                       </div>
                     ))}
                   </div>
                 )}
                 {!loading && datasetType==="generic" && (
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                    <div className="bg-white border border-stone-200 rounded-2xl p-4"><div className="text-[11px] font-bold tracking-widest uppercase text-stone-600">Rows</div><div className="text-2xl font-extrabold mt-1">{fmt(filtered.length)}</div><div className="text-xs text-stone-600">of {fmt(active?.rows.length??0)} total</div></div>
+                    <div className="bg-white border border-slate-200 rounded-2xl p-4"><div className="text-[11px] font-bold tracking-widest uppercase text-slate-600">Rows</div><div className="text-2xl font-extrabold mt-1">{fmt(filtered.length)}</div><div className="text-xs text-slate-600">of {fmt(active?.rows.length??0)} total</div></div>
                     {genericSummary.map(s=>(
-                      <div key={s.col} className="bg-white border border-stone-200 rounded-2xl p-4"><div className="text-[11px] font-bold tracking-widest uppercase text-stone-600">{s.col}</div><div className="text-xl font-extrabold mt-1">{fmtCompact(Math.round(s.sum))}</div><div className="text-xs text-stone-600">avg {fmt(Math.round(s.avg))} • max {fmt(s.max)}</div></div>
+                      <div key={s.col} className="bg-white border border-slate-200 rounded-2xl p-4"><div className="text-[11px] font-bold tracking-widest uppercase text-slate-600">{s.col}</div><div className="text-xl font-extrabold mt-1">{fmtCompact(Math.round(s.sum))}</div><div className="text-xs text-slate-600">avg {fmt(Math.round(s.avg))} • max {fmt(s.max)}</div></div>
                     ))}
                   </div>
                 )}
 
                 {/* Historical trend requires persisted snapshots */}
-                <div className="bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden">
-                  <div className="px-5 py-4 border-b border-stone-200 flex items-center justify-between gap-3">
-                    <div><div className="text-sm font-bold text-stone-900">HISTORICAL TREND</div><div className="text-xs text-stone-600">Requires at least two saved reporting snapshots</div></div>
+                <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                  <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-3">
+                    <div><div className="text-sm font-bold text-slate-900">HISTORICAL TREND</div><div className="text-xs text-slate-600">Requires at least two saved reporting snapshots</div></div>
                     <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-3 py-1.5">Baseline only</span>
                   </div>
                   <div className="p-8 text-center">
-                    <div className="text-sm font-semibold text-stone-800">No previous snapshot available</div>
-                    <div className="text-xs text-stone-600 mt-1 max-w-md mx-auto">This upload is treated as the current baseline. Historical charts will appear after snapshot storage and a later upload are added.</div>
+                    <div className="text-sm font-semibold text-slate-800">No previous snapshot available</div>
+                    <div className="text-xs text-slate-600 mt-1 max-w-md mx-auto">This upload is treated as the current baseline. Historical charts will appear after snapshot storage and a later upload are added.</div>
                   </div>
                 </div>
 
                 <div className="grid lg:grid-cols-2 gap-4">
                   {/* Top 10 Ranking per spec 8-9 */}
-                  <div className="bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden">
-                    <div className="px-5 py-4 border-b border-stone-200 flex items-center justify-between gap-3">
-                      <div><div className="text-sm font-bold text-stone-900">TOP 10 SCHOOLS</div><div className="text-xs text-stone-600">Ranking updates automatically • Top vs Bottom vs Distribution</div></div>
-                      <select value={rankingMetric} onChange={e=>setRankingMetric(e.target.value as any)} className="px-2.5 py-1.5 rounded-full border border-stone-200 bg-stone-50 text-xs font-semibold">
+                  <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                    <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-3">
+                      <div><div className="text-sm font-bold text-slate-900">TOP 10 SCHOOLS</div><div className="text-xs text-slate-600">Ranking updates automatically • Top vs Bottom vs Distribution</div></div>
+                      <select value={rankingMetric} onChange={e=>setRankingMetric(e.target.value as any)} className="px-2.5 py-1.5 rounded-full border border-slate-200 bg-slate-50 text-xs font-semibold">
                         <option value="DOWNLOADS">Downloads</option><option value="REGISTERED USERS">Registered Users</option><option value="ACTUAL USERS">Active Users</option><option value="PARTICIPATION RATE">Participation</option>
                       </select>
                     </div>
-                    <div className="divide-y divide-stone-100">
+                    <div className="divide-y divide-slate-100">
                       {rankingData.length? rankingData.map((r,i)=>(
-                        <div key={r.name} className="flex items-center gap-3 px-5 py-2.5 hover:bg-stone-50">
-                          <span className={`size-7 rounded-full grid place-items-center text-xs font-bold ${i<3?"bg-violet-600 text-white":"bg-stone-100 text-stone-600"}`}>{i+1}</span>
-                          <span className="flex-1 text-sm font-medium text-stone-800 truncate" title={r.name}>{r.name}</span>
+                        <div key={r.name} className="flex items-center gap-3 px-5 py-2.5 hover:bg-slate-50">
+                          <span className={`size-7 rounded-full grid place-items-center text-xs font-bold ${i<3?"bg-indigo-600 text-white":"bg-slate-100 text-slate-600"}`}>{i+1}</span>
+                          <span className="flex-1 text-sm font-medium text-slate-800 truncate" title={r.name}>{r.name}</span>
                           <div className="flex items-center gap-2">
-                            <div className="hidden sm:block w-24 h-2 bg-stone-100 rounded-full overflow-hidden">
-                              <div className="h-full bg-violet-600 rounded-full" style={{width: `${Math.max(6, (r.value/(rankingData[0]?.value||1))*100)}%`}}/>
+                            <div className="hidden sm:block w-24 h-2 bg-slate-100 rounded-full overflow-hidden">
+                              <div className="h-full bg-indigo-600 rounded-full" style={{width: `${Math.max(6, (r.value/(rankingData[0]?.value||1))*100)}%`}}/>
                             </div>
-                            <span className="font-mono text-sm font-bold text-stone-900 min-w-[60px] text-right">{rankingMetric==="PARTICIPATION RATE"? r.value.toFixed(0)+"%": fmt(r.value)}</span>
+                            <span className="font-mono text-sm font-bold text-slate-900 min-w-[60px] text-right">{rankingMetric==="PARTICIPATION RATE"? r.value.toFixed(0)+"%": fmt(r.value)}</span>
                           </div>
                         </div>
-                      )): <div className="p-8 text-center text-sm text-stone-600">No school data — load Utilization file</div>}
+                      )): <div className="p-8 text-center text-sm text-slate-600">No school data — load Utilization file</div>}
                     </div>
-                    <div className="px-5 py-3 bg-stone-50 border-t border-stone-200 text-xs text-stone-600">RANK BY: <b className="text-stone-700">{rankingMetric}</b> • switch metric to answer different questions without duplicating dashboard</div>
+                    <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 text-xs text-slate-600">RANK BY: <b className="text-slate-700">{rankingMetric}</b> • switch metric to answer different questions without duplicating dashboard</div>
                   </div>
 
                   {/* School Activity Distribution per spec 10 + School Summary per spec 7.1 */}
                   <div className="space-y-4">
-                    <div className="bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden">
-                      <div className="px-5 py-4 border-b border-stone-200"><div className="text-sm font-bold text-stone-900">SCHOOL ACTIVITY DISTRIBUTION</div><div className="text-xs text-stone-600">Thresholds — No:0 • Low:1–20 • Moderate:21–100 • High:101+ downloads</div></div>
+                    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                      <div className="px-5 py-4 border-b border-slate-200"><div className="text-sm font-bold text-slate-900">SCHOOL ACTIVITY DISTRIBUTION</div><div className="text-xs text-slate-600">Thresholds — No:0 • Low:1–20 • Moderate:21–100 • High:101+ downloads</div></div>
                       <div className="h-[200px] p-3">
                         {activityDist.length?(
                           <ResponsiveContainer width="100%" height="100%">
@@ -571,71 +572,71 @@ export default function App(){
                               </Bar>
                             </BarChart>
                           </ResponsiveContainer>
-                        ): <div className="p-8 text-center text-stone-600 text-sm">No distribution</div>}
+                        ): <div className="p-8 text-center text-slate-600 text-sm">No distribution</div>}
                       </div>
                       {schoolKPIs && (
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 px-5 pb-4 text-xs">
-                          <div className="bg-stone-50 border border-stone-200 rounded-xl p-2.5 text-center"><div className="font-bold text-stone-900">{fmt(schoolKPIs.totalSchools)}</div><div className="text-stone-600">Total Schools</div></div>
+                          <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-center"><div className="font-bold text-slate-900">{fmt(schoolKPIs.totalSchools)}</div><div className="text-slate-600">Total Schools</div></div>
                           <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 text-center"><div className="font-bold text-emerald-700">{fmt(schoolKPIs.activeSchools)}</div><div className="text-emerald-600">Active ( &gt;0 dl)</div></div>
-                          <div className="bg-stone-50 border border-stone-200 rounded-xl p-2.5 text-center"><div className="font-bold text-stone-900">{fmt(schoolKPIs.inactiveSchools)}</div><div className="text-stone-600">Inactive (0 dl)</div></div>
-                          <div className="bg-violet-50 border border-violet-200 rounded-xl p-2.5 text-center"><div className="font-bold text-violet-700">{fmt(Math.round(schoolKPIs.avgDownloads))}</div><div className="text-violet-600">Avg / school</div></div>
+                          <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-center"><div className="font-bold text-slate-900">{fmt(schoolKPIs.inactiveSchools)}</div><div className="text-slate-600">Inactive (0 dl)</div></div>
+                          <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-2.5 text-center"><div className="font-bold text-indigo-700">{fmt(Math.round(schoolKPIs.avgDownloads))}</div><div className="text-indigo-600">Avg / school</div></div>
                         </div>
                       )}
                     </div>
-                    <div className="bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden">
-                      <div className="px-5 py-3 border-b border-stone-200 flex items-center justify-between">
-                        <div className="text-sm font-bold text-stone-900">SCHOOL SUMMARY</div>
-                        <span className="text-xs bg-stone-900 text-white rounded-full px-2 py-1">{schoolKPIs? `Highest ${fmtCompact(schoolKPIs.maxDownloads)} • Lowest ${fmt(schoolKPIs.minDownloads)}` : ""}</span>
+                    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                      <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
+                        <div className="text-sm font-bold text-slate-900">SCHOOL SUMMARY</div>
+                        <span className="text-xs bg-slate-900 text-white rounded-full px-2 py-1">{schoolKPIs? `Highest ${fmtCompact(schoolKPIs.maxDownloads)} • Lowest ${fmt(schoolKPIs.minDownloads)}` : ""}</span>
                       </div>
                       <div className="p-3 grid grid-cols-2 gap-2 text-xs">
-                        <div className="rounded-xl bg-stone-50 border border-stone-200 p-3"><div className="text-stone-600">Total Schools</div><div className="font-bold text-stone-900 text-base">{schoolKPIs? fmt(schoolKPIs.totalSchools):"—"}</div></div>
+                        <div className="rounded-xl bg-slate-50 border border-slate-200 p-3"><div className="text-slate-600">Total Schools</div><div className="font-bold text-slate-900 text-base">{schoolKPIs? fmt(schoolKPIs.totalSchools):"—"}</div></div>
                         <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3"><div className="text-emerald-600">Active Schools</div><div className="font-bold text-emerald-700 text-base">{schoolKPIs? fmt(schoolKPIs.activeSchools):"—"}</div></div>
-                        <div className="rounded-xl bg-stone-50 border border-stone-200 p-3"><div className="text-stone-600">Inactive Schools</div><div className="font-bold text-stone-900 text-base">{schoolKPIs? fmt(schoolKPIs.inactiveSchools):"—"}</div></div>
-                        <div className="rounded-xl bg-violet-50 border border-violet-200 p-3"><div className="text-violet-600">Average Downloads</div><div className="font-bold text-violet-700 text-base">{schoolKPIs? fmt(Math.round(schoolKPIs.avgDownloads)):"—"}</div></div>
+                        <div className="rounded-xl bg-slate-50 border border-slate-200 p-3"><div className="text-slate-600">Inactive Schools</div><div className="font-bold text-slate-900 text-base">{schoolKPIs? fmt(schoolKPIs.inactiveSchools):"—"}</div></div>
+                        <div className="rounded-xl bg-indigo-50 border border-indigo-200 p-3"><div className="text-indigo-600">Average Downloads</div><div className="font-bold text-indigo-700 text-base">{schoolKPIs? fmt(Math.round(schoolKPIs.avgDownloads)):"—"}</div></div>
                       </div>
-                      <div className="px-5 pb-3 text-[11px] text-stone-600">Active = Downloads &gt; 0 • thresholds documented above</div>
+                      <div className="px-5 pb-3 text-[11px] text-slate-600">Active = Downloads &gt; 0 • thresholds documented above</div>
                     </div>
                   </div>
                 </div>
 
                 {/* Snapshot comparison requires persisted snapshots */}
-                <div className="bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden">
-                  <div className="px-5 py-4 border-b border-stone-200 flex items-center justify-between">
-                    <div><div className="text-sm font-bold text-stone-900">SNAPSHOT COMPARISON</div><div className="text-xs text-stone-600">Current vs. previous reporting period</div></div>
+                <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                  <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+                    <div><div className="text-sm font-bold text-slate-900">SNAPSHOT COMPARISON</div><div className="text-xs text-slate-600">Current vs. previous reporting period</div></div>
                     <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-3 py-1">Not available</span>
                   </div>
                   <div className="p-8 text-center">
-                    <div className="text-sm font-semibold text-stone-800">No comparison can be calculated yet</div>
-                    <div className="text-xs text-stone-600 mt-1 max-w-md mx-auto">The current file is the baseline. Upload a later export and save snapshots to enable increased, decreased, and unchanged comparisons.</div>
+                    <div className="text-sm font-semibold text-slate-800">No comparison can be calculated yet</div>
+                    <div className="text-xs text-slate-600 mt-1 max-w-md mx-auto">The current file is the baseline. Upload a later export and save snapshots to enable increased, decreased, and unchanged comparisons.</div>
                   </div>
                 </div>
 
                 {/* Filters summary footer per spec 26 */}
                 <div className="grid md:grid-cols-3 gap-3">
-                  <div className="bg-white border border-stone-200 rounded-2xl p-4"><div className="text-sm font-bold text-stone-900">Filters Active</div><div className="text-xs text-stone-600 mt-1">Month: <b className="text-stone-700">{reportingMonth} {reportingYear}</b> • School: <b className="text-stone-700">{schoolFilter}</b> • Metric: <b className="text-stone-700">{rankingMetric}</b> — school metrics reflect the current file; the month applies to registration-based figures.</div></div>
-                  <div className="bg-white border border-stone-200 rounded-2xl p-4"><div className="text-sm font-bold text-stone-900">Data → Information → Insight</div><div className="text-xs text-stone-600 mt-1">What is status? What changed? Which schools most active? Which need attention? Why? Then drill to detail.</div></div>
-                  <div className="bg-white border border-stone-200 rounded-2xl p-4"><div className="text-sm font-bold text-stone-900">Update Procedure</div><div className="text-xs text-stone-600 mt-1">1. Import the latest export • 2. Confirm the reporting period • 3. Review validation • 4. Open the Dashboard • 5. Export or present.</div></div>
+                  <div className="bg-white border border-slate-200 rounded-2xl p-4"><div className="text-sm font-bold text-slate-900">Filters Active</div><div className="text-xs text-slate-600 mt-1">Month: <b className="text-slate-700">{reportingMonth} {reportingYear}</b> • School: <b className="text-slate-700">{schoolFilter}</b> • Metric: <b className="text-slate-700">{rankingMetric}</b> — school metrics reflect the current file; the month applies to registration-based figures.</div></div>
+                  <div className="bg-white border border-slate-200 rounded-2xl p-4"><div className="text-sm font-bold text-slate-900">Data → Information → Insight</div><div className="text-xs text-slate-600 mt-1">What is status? What changed? Which schools most active? Which need attention? Why? Then drill to detail.</div></div>
+                  <div className="bg-white border border-slate-200 rounded-2xl p-4"><div className="text-sm font-bold text-slate-900">Update Procedure</div><div className="text-xs text-slate-600 mt-1">1. Import the latest export • 2. Confirm the reporting period • 3. Review validation • 4. Open the Dashboard • 5. Export or present.</div></div>
                 </div>
               </div>
             )}
 
             {view==="school" && (
               <div id="panel-school" role="tabpanel" aria-labelledby="tab-school" tabIndex={0} className="space-y-4 outline-none">
-                <div className="bg-white border border-stone-200 rounded-2xl p-4 flex flex-wrap items-center gap-3">
-                  <span className="text-xs font-bold tracking-widest uppercase text-stone-600">School Analysis</span>
+                <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-wrap items-center gap-3">
+                  <span className="text-xs font-bold tracking-widest uppercase text-slate-600">School Analysis</span>
                   <label className="sr-only" htmlFor="ranking-metric-school">Ranking metric</label>
-                  <select id="ranking-metric-school" aria-label="Ranking metric" value={rankingMetric} onChange={e=>setRankingMetric(e.target.value as any)} className="px-3 py-2 rounded-xl border border-stone-200 bg-white text-sm font-medium focus-visible:ring-2 focus-visible:ring-violet-500">
+                  <select id="ranking-metric-school" aria-label="Ranking metric" value={rankingMetric} onChange={e=>setRankingMetric(e.target.value as any)} className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-medium focus-visible:ring-2 focus-visible:ring-indigo-500">
                     <option value="DOWNLOADS">Rank by Downloads</option><option value="REGISTERED USERS">Rank by Registered</option><option value="ACTUAL USERS">Rank by Active</option><option value="PARTICIPATION RATE">Rank by Participation</option>
                   </select>
                   <label className="sr-only" htmlFor="school-filter-2">Filter by school</label>
-                  <select id="school-filter-2" aria-label="Filter by school" value={schoolFilter} onChange={e=>setSchoolFilter(e.target.value)} className="px-3 py-2 rounded-xl border border-stone-200 bg-white text-sm max-w-[240px] focus-visible:ring-2 focus-visible:ring-violet-500">
+                  <select id="school-filter-2" aria-label="Filter by school" value={schoolFilter} onChange={e=>setSchoolFilter(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm max-w-[240px] focus-visible:ring-2 focus-visible:ring-indigo-500">
                     {schoolOptions.map(o=><option key={o}>{o}</option>)}
                   </select>
-                  <span className="ml-auto text-xs text-stone-600">{rankingData.length} ranked • {activityDist.reduce((a,b)=>a+b.value,0)} schools in scope</span>
+                  <span className="ml-auto text-xs text-slate-600">{rankingData.length} ranked • {activityDist.reduce((a,b)=>a+b.value,0)} schools in scope</span>
                 </div>
                 <div className="grid lg:grid-cols-[1.1fr_0.9fr] gap-4">
-                  <div className="bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden">
-                    <div className="px-5 py-4 border-b border-stone-200"><div className="text-sm font-bold text-stone-900">School Ranking — Top 10 by {rankingMetric}</div><div className="text-xs text-stone-600">Conditional formatting • bars grow with value</div></div>
+                  <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                    <div className="px-5 py-4 border-b border-slate-200"><div className="text-sm font-bold text-slate-900">School Ranking — Top 10 by {rankingMetric}</div><div className="text-xs text-slate-600">Conditional formatting • bars grow with value</div></div>
                     <div className="h-[420px] p-2">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={[...rankingData].reverse()} layout="vertical" margin={{left:10,right:20}}>
@@ -648,61 +649,61 @@ export default function App(){
                       </ResponsiveContainer>
                     </div>
                   </div>
-                  <div className="bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden">
-                    <div className="px-5 py-4 border-b border-stone-200"><div className="text-sm font-bold text-stone-900">School Activity Distribution</div><div className="text-xs text-stone-600">High / Moderate / Low / No — documented thresholds</div></div>
+                  <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                    <div className="px-5 py-4 border-b border-slate-200"><div className="text-sm font-bold text-slate-900">School Activity Distribution</div><div className="text-xs text-slate-600">High / Moderate / Low / No — documented thresholds</div></div>
                     <div className="h-[260px] p-3">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={activityDist}><CartesianGrid strokeDasharray="3 3" stroke="#f5f5f4"/><XAxis dataKey="name" tick={{fontSize:10}} interval={0} angle={-10} dy={8} height={48}/><YAxis tick={{fontSize:11}} allowDecimals={false}/><Tooltip content={<Tip/>}/><Bar dataKey="value" radius={[8,8,0,0]}>{activityDist.map((_,i)=><Cell key={i} fill={["#e7e5e4","#fde68a","#fb923c","#16a34a"][i]}/> )}</Bar></BarChart>
                       </ResponsiveContainer>
                     </div>
                     <div className="px-5 pb-4">
-                      <div className="rounded-xl bg-stone-50 border border-stone-200 p-3 text-xs leading-5">
-                        <div className="font-bold text-stone-900">Definitions</div>
-                        <div className="text-stone-600 mt-1 space-y-1">
+                      <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 text-xs leading-5">
+                        <div className="font-bold text-slate-900">Definitions</div>
+                        <div className="text-slate-600 mt-1 space-y-1">
                           <div><span className="inline-block size-2 rounded-full bg-emerald-500 mr-1"/> High: &gt;100 downloads</div>
                           <div><span className="inline-block size-2 rounded-full bg-orange-400 mr-1"/> Moderate: 21–100</div>
                           <div><span className="inline-block size-2 rounded-full bg-amber-300 mr-1"/> Low: 1–20</div>
-                          <div><span className="inline-block size-2 rounded-full bg-stone-300 mr-1"/> No: 0</div>
+                          <div><span className="inline-block size-2 rounded-full bg-slate-300 mr-1"/> No: 0</div>
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
-                <div className="bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden">
-                  <div className="px-5 py-4 border-b border-stone-200 flex items-center justify-between">
-                    <div><div className="text-sm font-bold text-stone-900">School Detail Table — with data bars & participation scale</div><div className="text-xs text-stone-600">Click headers to sort • visual indicators make large differences immediate</div></div>
-                    <span className="text-xs bg-stone-50 border border-stone-200 rounded-full px-3 py-1">{filtered.length} rows</span>
+                <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                  <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+                    <div><div className="text-sm font-bold text-slate-900">School Detail Table — with data bars & participation scale</div><div className="text-xs text-slate-600">Click headers to sort • visual indicators make large differences immediate</div></div>
+                    <span className="text-xs bg-slate-50 border border-slate-200 rounded-full px-3 py-1">{filtered.length} rows</span>
                   </div>
-                  <div tabIndex={0} role="region" aria-label="School detail table, scroll to see more columns" className="overflow-auto max-h-[560px] focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-inset outline-none">
+                  <div tabIndex={0} role="region" aria-label="School detail table, scroll to see more columns" className="overflow-auto max-h-[560px] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset outline-none">
                     <table className="w-full text-sm">
-                      <thead className="sticky top-0 bg-stone-50 border-b border-stone-200">
+                      <thead className="sticky top-0 bg-slate-50 border-b border-slate-200">
                         <tr>{displayedHeaders.map(h=>(
-                          <th key={h} scope="col" tabIndex={0} role="button" aria-sort={sortKey===h ? (sortDir==="asc" ? "ascending" : "descending") : "none"} aria-label={`${h}, sortable`} onClick={()=>{ if(sortKey===h) setSortDir(d=>d==="asc"?"desc":"asc"); else {setSortKey(h); setSortDir("asc")}}} onKeyDown={e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); if(sortKey===h) setSortDir(d=>d==="asc"?"desc":"asc"); else {setSortKey(h); setSortDir("asc")} } }} className="text-left px-3 py-2.5 font-semibold cursor-pointer whitespace-nowrap hover:bg-stone-100 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-500 outline-none">{h} <span aria-hidden="true">{sortKey===h&&(sortDir==="asc"?"▲":"▼")}</span></th>
+                          <th key={h} scope="col" tabIndex={0} role="button" aria-sort={sortKey===h ? (sortDir==="asc" ? "ascending" : "descending") : "none"} aria-label={`${h}, sortable`} onClick={()=>{ if(sortKey===h) setSortDir(d=>d==="asc"?"desc":"asc"); else {setSortKey(h); setSortDir("asc")}}} onKeyDown={e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); if(sortKey===h) setSortDir(d=>d==="asc"?"desc":"asc"); else {setSortKey(h); setSortDir("asc")} } }} className="text-left px-3 py-2.5 font-semibold cursor-pointer whitespace-nowrap hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 outline-none">{h} <span aria-hidden="true">{sortKey===h&&(sortDir==="asc"?"▲":"▼")}</span></th>
                         ))}</tr>
                       </thead>
-                      <tbody className="divide-y divide-stone-100">
+                      <tbody className="divide-y divide-slate-100">
                         {paged.map((r,i)=>(
-                          <tr key={i} className="hover:bg-stone-50">
+                          <tr key={i} className="hover:bg-slate-50">
                             {displayedHeaders.map(h=>{
                               const v=cleanValue(r[h]); const n=toNumber(v)
                               if(h==="DOWNLOADS" && n!==null){
                                 const pct=downloadMax? (n/downloadMax*100):0
-                                return <td key={h} className="px-3 py-2 whitespace-nowrap"><div className="flex items-center gap-2"><div className="w-20 h-2 bg-stone-100 rounded-full overflow-hidden"><div className="h-full bg-violet-600 rounded-full" style={{width:`${pct}%`}}/></div><span className="font-mono text-xs font-medium">{fmt(n)}</span></div></td>
+                                return <td key={h} className="px-3 py-2 whitespace-nowrap"><div className="flex items-center gap-2"><div className="w-20 h-2 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-indigo-600 rounded-full" style={{width:`${pct}%`}}/></div><span className="font-mono text-xs font-medium">{fmt(n)}</span></div></td>
                               }
                               if(h==="PARTICIPATION RATE"){
-                                const num=toNumber(v)??0; let bg="bg-stone-100 text-stone-600 border-stone-200"; if(num===0) bg="bg-red-50 text-red-700 border-red-200"; else if(num<30) bg="bg-amber-50 text-amber-700 border-amber-200"; else if(num<70) bg="bg-yellow-50 text-yellow-700 border-yellow-200"; else bg="bg-emerald-50 text-emerald-700 border-emerald-200";
+                                const num=toNumber(v)??0; let bg="bg-slate-100 text-slate-600 border-slate-200"; if(num===0) bg="bg-red-50 text-red-700 border-red-200"; else if(num<30) bg="bg-amber-50 text-amber-700 border-amber-200"; else if(num<70) bg="bg-yellow-50 text-yellow-700 border-yellow-200"; else bg="bg-emerald-50 text-emerald-700 border-emerald-200";
                                 return <td key={h} className="px-3 py-2 whitespace-nowrap"><span className={`inline-flex px-2 py-0.5 rounded-full border text-xs font-semibold ${bg}`}>{v||"0%"}</span></td>
                               }
-                              if(h==="SCHOOL NAME") return <td key={h} className="px-3 py-2 max-w-[280px] truncate font-medium text-stone-800" title={v}>{v}</td>
-                              return <td key={h} className="px-3 py-2 whitespace-nowrap max-w-[260px] truncate">{v||<span className="text-stone-300">—</span>}</td>
+                              if(h==="SCHOOL NAME") return <td key={h} className="px-3 py-2 max-w-[280px] truncate font-medium text-slate-800" title={v}>{v}</td>
+                              return <td key={h} className="px-3 py-2 whitespace-nowrap max-w-[260px] truncate">{v||<span className="text-slate-300">—</span>}</td>
                             })}
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
-                  <div className="px-4 py-3 bg-stone-50 border-t border-stone-200 flex items-center justify-between text-xs">
-                    <span className="text-stone-600">Showing {(page-1)*pageSize+1}–{Math.min(page*pageSize,filtered.length)} of {fmt(filtered.length)}</span>
+                  <div className="px-4 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs">
+                    <span className="text-slate-600">Showing {(page-1)*pageSize+1}–{Math.min(page*pageSize,filtered.length)} of {fmt(filtered.length)}</span>
                     <div className="flex gap-2"><button disabled={page<=1} onClick={()=>setPage(p=>p-1)} className="px-3 py-1 rounded-full border bg-white disabled:opacity-40">‹ Prev</button><span className="px-3 py-1 rounded-full bg-white border">Page {page}/{totalPages}</span><button disabled={page>=totalPages} onClick={()=>setPage(p=>p+1)} className="px-3 py-1 rounded-full border bg-white disabled:opacity-40">Next ›</button></div>
                   </div>
                 </div>
@@ -714,8 +715,8 @@ export default function App(){
                 {userKPIs?(
                   <>
                     <div className="grid lg:grid-cols-3 gap-4">
-                      <div className="lg:col-span-2 bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden">
-                        <div className="px-5 py-4 border-b border-stone-200"><div className="text-sm font-bold text-stone-900">Users by Role</div><div className="text-xs text-stone-600">Distribution • keep off dashboard unless needed</div></div>
+                      <div className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                        <div className="px-5 py-4 border-b border-slate-200"><div className="text-sm font-bold text-slate-900">Users by Role</div><div className="text-xs text-slate-600">Distribution • keep off dashboard unless needed</div></div>
                         <div className="h-[280px] p-3">
                           <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={userKPIs.byRole.map(([name,value])=>({name,value}))}>
@@ -728,8 +729,8 @@ export default function App(){
                           </ResponsiveContainer>
                         </div>
                       </div>
-                      <div className="bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden">
-                        <div className="px-5 py-4 border-b border-stone-200"><div className="text-sm font-bold text-stone-900">Users by Gender</div><div className="text-xs text-stone-600">If applicable & appropriate</div></div>
+                      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                        <div className="px-5 py-4 border-b border-slate-200"><div className="text-sm font-bold text-slate-900">Users by Gender</div><div className="text-xs text-slate-600">If applicable & appropriate</div></div>
                         <div className="h-[280px] p-3">
                           <ResponsiveContainer width="100%" height="100%">
                             <PieChart><Pie data={userKPIs.byGender.map(([name,value])=>({name,value}))} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={3} label={({name,percent}:any)=>`${name} ${((percent??0)*100).toFixed(0)}%`}>{userKPIs.byGender.map((_:any,i:number)=><Cell key={i} fill={COLORS[i%COLORS.length]}/>)}</Pie><Tooltip content={<Tip/>}/></PieChart>
@@ -737,38 +738,38 @@ export default function App(){
                         </div>
                       </div>
                     </div>
-                    <div className="bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden">
-                      <div className="px-5 py-4 border-b border-stone-200"><div className="text-sm font-bold text-stone-900">New User Registrations — by month</div><div className="text-xs text-stone-600">Registration trend for long-term analysis</div></div>
+                    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                      <div className="px-5 py-4 border-b border-slate-200"><div className="text-sm font-bold text-slate-900">New User Registrations — by month</div><div className="text-xs text-slate-600">Registration trend for long-term analysis</div></div>
                       <div className="h-[260px] p-3">
                         {userRegTrend.length?(
                           <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={userRegTrend}><CartesianGrid strokeDasharray="3 3" stroke="#f5f5f4"/><XAxis dataKey="name" tick={{fontSize:11}}/><YAxis tick={{fontSize:11}} allowDecimals={false}/><Tooltip content={<Tip/>}/><Area type="monotone" dataKey="value" stroke="#10b981" fill="#dcfce7" strokeWidth={2}/></AreaChart>
                           </ResponsiveContainer>
-                        ):<div className="h-full grid place-items-center text-sm text-stone-600">No date data</div>}
+                        ):<div className="h-full grid place-items-center text-sm text-slate-600">No date data</div>}
                       </div>
                     </div>
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                      <div className="bg-white border border-stone-200 rounded-2xl p-4 text-center"><div className="text-xs text-stone-600">Total Users</div><div className="text-xl font-extrabold">{fmt(userKPIs.totalUsers)}</div></div>
-                      <div className="bg-white border border-stone-200 rounded-2xl p-4 text-center"><div className="text-xs text-stone-600">New in {reportingMonth}</div><div className="text-xl font-extrabold text-violet-600">{fmt(userKPIs.newUsers)}</div></div>
-                      <div className="bg-white border border-stone-200 rounded-2xl p-4 text-center"><div className="text-xs text-stone-600">Roles</div><div className="text-xl font-extrabold">{userKPIs.byRole.length}</div></div>
-                      <div className="bg-white border border-stone-200 rounded-2xl p-4 text-center"><div className="text-xs text-stone-600">Avg downloads / user</div><div className="text-xl font-extrabold">{(userKPIs.totalDownloads/userKPIs.totalUsers).toFixed(1)}</div></div>
+                      <div className="bg-white border border-slate-200 rounded-2xl p-4 text-center"><div className="text-xs text-slate-600">Total Users</div><div className="text-xl font-extrabold">{fmt(userKPIs.totalUsers)}</div></div>
+                      <div className="bg-white border border-slate-200 rounded-2xl p-4 text-center"><div className="text-xs text-slate-600">New in {reportingMonth}</div><div className="text-xl font-extrabold text-indigo-600">{fmt(userKPIs.newUsers)}</div></div>
+                      <div className="bg-white border border-slate-200 rounded-2xl p-4 text-center"><div className="text-xs text-slate-600">Roles</div><div className="text-xl font-extrabold">{userKPIs.byRole.length}</div></div>
+                      <div className="bg-white border border-slate-200 rounded-2xl p-4 text-center"><div className="text-xs text-slate-600">Avg downloads / user</div><div className="text-xl font-extrabold">{(userKPIs.totalDownloads/userKPIs.totalUsers).toFixed(1)}</div></div>
                     </div>
-                    <div className="bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden">
-                      <div className="px-5 py-4 border-b border-stone-200"><div className="text-sm font-bold text-stone-900">User Detail Table</div><div className="text-xs text-stone-600">Retain user records • search by name, email, ID</div></div>
+                    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                      <div className="px-5 py-4 border-b border-slate-200"><div className="text-sm font-bold text-slate-900">User Detail Table</div><div className="text-xs text-slate-600">Retain user records • search by name, email, ID</div></div>
                       <div className="overflow-auto max-h-[520px]">
-                        <table className="w-full text-sm"><thead className="sticky top-0 bg-stone-50 border-b"><tr>{displayedHeaders.map(h=>(
-                          <th key={h} onClick={()=>{ if(sortKey===h) setSortDir(d=>d==="asc"?"desc":"asc"); else {setSortKey(h); setSortDir("asc")}}} className="text-left px-3 py-2.5 font-semibold cursor-pointer whitespace-nowrap hover:bg-stone-100">{h} {sortKey===h&&(sortDir==="asc"?"▲":"▼")}</th>
-                        ))}</tr></thead><tbody className="divide-y divide-stone-100">{paged.map((r,i)=>(
-                          <tr key={i} className="hover:bg-stone-50">{displayedHeaders.map(h=>{
+                        <table className="w-full text-sm"><thead className="sticky top-0 bg-slate-50 border-b"><tr>{displayedHeaders.map(h=>(
+                          <th key={h} onClick={()=>{ if(sortKey===h) setSortDir(d=>d==="asc"?"desc":"asc"); else {setSortKey(h); setSortDir("asc")}}} className="text-left px-3 py-2.5 font-semibold cursor-pointer whitespace-nowrap hover:bg-slate-100">{h} {sortKey===h&&(sortDir==="asc"?"▲":"▼")}</th>
+                        ))}</tr></thead><tbody className="divide-y divide-slate-100">{paged.map((r,i)=>(
+                          <tr key={i} className="hover:bg-slate-50">{displayedHeaders.map(h=>{
                             const v=cleanValue(r[h]); const low=v.toLowerCase()
                             if(low==="active") return <td key={h} className="px-3 py-2"><span className="text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5">ACTIVE</span></td>
                             if(low==="female") return <td key={h} className="px-3 py-2"><span className="text-xs bg-pink-50 text-pink-700 border border-pink-200 rounded-full px-2 py-0.5">Female</span></td>
                             if(low==="male") return <td key={h} className="px-3 py-2"><span className="text-xs bg-sky-50 text-sky-700 border border-sky-200 rounded-full px-2 py-0.5">Male</span></td>
-                            return <td key={h} className="px-3 py-2 whitespace-nowrap max-w-[260px] truncate">{v||<span className="text-stone-300">—</span>}</td>
+                            return <td key={h} className="px-3 py-2 whitespace-nowrap max-w-[260px] truncate">{v||<span className="text-slate-300">—</span>}</td>
                           })}</tr>
                         ))}</tbody></table>
                       </div>
-                      <div className="px-4 py-3 bg-stone-50 border-t flex items-center justify-between text-xs"><span>{fmt(filtered.length)} users</span><div className="flex gap-2"><button disabled={page<=1} onClick={()=>setPage(p=>p-1)} className="px-3 py-1 rounded-full border bg-white disabled:opacity-40">Prev</button><span className="px-3 py-1 bg-white border rounded-full">Page {page}/{totalPages}</span><button disabled={page>=totalPages} onClick={()=>setPage(p=>p+1)} className="px-3 py-1 rounded-full border bg-white disabled:opacity-40">Next</button></div></div>
+                      <div className="px-4 py-3 bg-slate-50 border-t flex items-center justify-between text-xs"><span>{fmt(filtered.length)} users</span><div className="flex gap-2"><button disabled={page<=1} onClick={()=>setPage(p=>p-1)} className="px-3 py-1 rounded-full border bg-white disabled:opacity-40">Prev</button><span className="px-3 py-1 bg-white border rounded-full">Page {page}/{totalPages}</span><button disabled={page>=totalPages} onClick={()=>setPage(p=>p+1)} className="px-3 py-1 rounded-full border bg-white disabled:opacity-40">Next</button></div></div>
                     </div>
                   </>
                 ):(
@@ -791,39 +792,39 @@ export default function App(){
 
             {view==="data" && (
               <div id="panel-data" role="tabpanel" aria-labelledby="tab-data" tabIndex={0} className="space-y-4 outline-none">
-                <div className="bg-white border border-stone-200 rounded-2xl p-4 flex flex-wrap items-center gap-3">
-                  <span className="text-sm font-bold text-stone-900">Detailed Data</span>
-                  <span className="text-xs text-stone-600">Raw records retained separate from visuals • search reduces rows • export keeps filtered view</span>
+                <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-wrap items-center gap-3">
+                  <span className="text-sm font-bold text-slate-900">Detailed Data</span>
+                  <span className="text-xs text-slate-600">Raw records retained separate from visuals • search reduces rows • export keeps filtered view</span>
                   <div className="ml-auto flex items-center gap-2">
                     <label className="sr-only" htmlFor="page-size">Rows per page</label>
-                    <select id="page-size" aria-label="Rows per page" value={pageSize} onChange={e=>setPageSize(Number(e.target.value))} className="px-2 py-1.5 rounded-xl border border-stone-200 bg-white text-xs focus-visible:ring-2 focus-visible:ring-violet-500"><option value={10}>10 / page</option><option value={25}>25 / page</option><option value={50}>50 / page</option><option value={100}>100 / page</option></select>
+                    <select id="page-size" aria-label="Rows per page" value={pageSize} onChange={e=>setPageSize(Number(e.target.value))} className="px-2 py-1.5 rounded-xl border border-slate-200 bg-white text-xs focus-visible:ring-2 focus-visible:ring-indigo-500"><option value={10}>10 / page</option><option value={25}>25 / page</option><option value={50}>50 / page</option><option value={100}>100 / page</option></select>
                     <button onClick={()=>{
                       try{ const ws=XLSX.utils.json_to_sheet(filtered); const csv=XLSX.utils.sheet_to_csv(ws); const blob=new Blob([csv],{type:"text/csv"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=`sheetly-${reportingMonth}-${reportingYear}.csv`; a.click(); URL.revokeObjectURL(url); setToast(`Exported ${fmt(filtered.length)} rows to CSV`) } catch{ setToast("Export failed") }
-                    }} className="px-3 py-1.5 rounded-xl bg-violet-600 text-white text-xs font-semibold hover:bg-violet-700 focus-visible:ring-2 focus-visible:ring-violet-500">Export CSV</button>
-                    <button onClick={()=>window.print()} className="px-3 py-1.5 rounded-xl border border-stone-200 bg-white text-xs font-medium hover:bg-stone-50 focus-visible:ring-2 focus-visible:ring-violet-500">Print</button>
+                    }} className="px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 focus-visible:ring-2 focus-visible:ring-indigo-500">Export CSV</button>
+                    <button onClick={()=>window.print()} className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-medium hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-indigo-500">Print</button>
                   </div>
                 </div>
 
                 {/* Data Validation & Quality Summary per spec 23-24 */}
                 {quality && (
                   <div className="grid lg:grid-cols-[1.1fr_0.9fr] gap-4">
-                    <div className="bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden">
-                      <div className="px-5 py-3 border-b border-stone-200 flex items-center justify-between"><div className="text-sm font-bold text-stone-900">Data Quality</div><span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${quality.status.includes("READY")?"bg-emerald-50 text-emerald-700 border-emerald-200":"bg-amber-50 text-amber-700 border-amber-200"}`}>{quality.status}</span></div>
+                    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                      <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between"><div className="text-sm font-bold text-slate-900">Data Quality</div><span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${quality.status.includes("READY")?"bg-emerald-50 text-emerald-700 border-emerald-200":"bg-amber-50 text-amber-700 border-amber-200"}`}>{quality.status}</span></div>
                       <div className="p-4 grid grid-cols-2 gap-3 text-sm">
-                        <div className="bg-stone-50 border border-stone-200 rounded-xl p-3 text-center"><div className="text-xs text-stone-600">Records Checked</div><div className="text-lg font-extrabold">{fmt(quality.total)}</div></div>
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center"><div className="text-xs text-slate-600">Records Checked</div><div className="text-lg font-extrabold">{fmt(quality.total)}</div></div>
                         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center"><div className="text-xs text-emerald-600">Complete Records</div><div className="text-lg font-extrabold text-emerald-700">{fmt(quality.complete)}</div></div>
                         <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center"><div className="text-xs text-amber-600">Missing Values</div><div className="text-lg font-extrabold text-amber-700">{fmt(quality.missingRecords)}</div></div>
-                        <div className="bg-stone-50 border border-stone-200 rounded-xl p-3 text-center"><div className="text-xs text-stone-600">Duplicate Records</div><div className="text-lg font-extrabold">{fmt(quality.dups)}</div></div>
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center"><div className="text-xs text-slate-600">Duplicate Records</div><div className="text-lg font-extrabold">{fmt(quality.dups)}</div></div>
                       </div>
-                      <div className="px-5 pb-4 text-xs text-stone-600">Validation Status: <b className={quality.status.includes("READY")?"text-emerald-700":"text-amber-700"}>{quality.status}</b> — review warnings before presenting dashboard.</div>
+                      <div className="px-5 pb-4 text-xs text-slate-600">Validation Status: <b className={quality.status.includes("READY")?"text-emerald-700":"text-amber-700"}>{quality.status}</b> — review warnings before presenting dashboard.</div>
                     </div>
-                    <div className="bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden">
-                      <div className="px-5 py-3 border-b border-stone-200"><div className="text-sm font-bold text-stone-900">Data Validation — 9 checks</div><div className="text-xs text-stone-600">Must pass before presenting monthly dashboard</div></div>
-                      <div className="divide-y divide-stone-100">
+                    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                      <div className="px-5 py-3 border-b border-slate-200"><div className="text-sm font-bold text-slate-900">Data Validation — 9 checks</div><div className="text-xs text-slate-600">Must pass before presenting monthly dashboard</div></div>
+                      <div className="divide-y divide-slate-100">
                         {validationItems.map(v=>(
                           <div key={v.label} className="flex items-center justify-between px-4 py-2 text-xs">
-                            <span className="flex items-center gap-2"><span className={`size-5 rounded-full grid place-items-center text-[11px] font-bold ${v.ok?"bg-emerald-500 text-white":"bg-amber-500 text-white"}`}>{v.ok?"✓":"!"}</span><span className="font-medium text-stone-700">{v.label}</span></span>
-                            <span className={`font-mono ${v.ok?"text-stone-600":"text-amber-700 font-semibold"}`}>{v.detail}</span>
+                            <span className="flex items-center gap-2"><span className={`size-5 rounded-full grid place-items-center text-[11px] font-bold ${v.ok?"bg-emerald-500 text-white":"bg-amber-500 text-white"}`}>{v.ok?"✓":"!"}</span><span className="font-medium text-slate-700">{v.label}</span></span>
+                            <span className={`font-mono ${v.ok?"text-slate-600":"text-amber-700 font-semibold"}`}>{v.detail}</span>
                           </div>
                         ))}
                       </div>
@@ -831,38 +832,38 @@ export default function App(){
                   </div>
                 )}
 
-                <div className="bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden">
-                  <div className="px-4 py-3 border-b border-stone-200 flex flex-wrap items-center gap-2">
-                    <div className="relative"><label className="sr-only" htmlFor="data-search">Search data</label><input id="data-search" type="search" aria-label="Search school, user or ID" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search school, user, ID…" className="w-[240px] pl-8 pr-3 py-2 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 outline-none text-sm"/><span aria-hidden="true" className="absolute left-2.5 top-2.5 text-stone-600 text-xs">⌕</span></div>
-                    <span className="text-xs text-stone-600">{fmt(filtered.length)} of {fmt(active?.rows.length??0)} match</span>
+                <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                  <div className="px-4 py-3 border-b border-slate-200 flex flex-wrap items-center gap-2">
+                    <div className="relative"><label className="sr-only" htmlFor="data-search">Search data</label><input id="data-search" type="search" aria-label="Search school, user or ID" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search school, user, ID…" className="w-[240px] pl-8 pr-3 py-2 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none text-sm"/><span aria-hidden="true" className="absolute left-2.5 top-2.5 text-slate-600 text-xs">⌕</span></div>
+                    <span className="text-xs text-slate-600">{fmt(filtered.length)} of {fmt(active?.rows.length??0)} match</span>
                     <details className="ml-auto relative">
-                      <summary className="list-none cursor-pointer text-xs font-semibold px-3 py-2 rounded-xl border border-stone-200 bg-white">Columns ▾</summary>
-                      <div className="absolute right-0 mt-2 w-64 bg-white border border-stone-200 rounded-2xl shadow-xl p-2 z-20 max-h-72 overflow-auto">
+                      <summary className="list-none cursor-pointer text-xs font-semibold px-3 py-2 rounded-xl border border-slate-200 bg-white">Columns ▾</summary>
+                      <div className="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-2xl shadow-xl p-2 z-20 max-h-72 overflow-auto">
                         {active?.headers.map(h=>(
-                          <label key={h} className="flex items-center gap-2 px-2 py-1.5 hover:bg-stone-50 rounded-xl text-sm cursor-pointer">
+                          <label key={h} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded-xl text-sm cursor-pointer">
                             <input type="checkbox" checked={displayedHeaders.includes(h)} onChange={e=> setVisibleCols(prev=>{
                               const cur=prev??active.headers; return e.target.checked? [...cur,h] : cur.filter(x=>x!==h)
-                            })}/><span className="truncate">{h}</span><span className="ml-auto text-[11px] px-1.5 py-0.5 rounded-full border bg-stone-50">{columnTypes[h]==="number"?"#":columnTypes[h]==="percent"?"%":columnTypes[h]==="date"?"📅":"Aa"}</span>
+                            })}/><span className="truncate">{h}</span><span className="ml-auto text-[11px] px-1.5 py-0.5 rounded-full border bg-slate-50">{columnTypes[h]==="number"?"#":columnTypes[h]==="percent"?"%":columnTypes[h]==="date"?"📅":"Aa"}</span>
                           </label>
                         ))}
-                        <button onClick={()=>setVisibleCols(active?.headers??null)} className="w-full mt-2 text-xs font-bold bg-stone-900 text-white rounded-full py-1.5">Reset</button>
+                        <button onClick={()=>setVisibleCols(active?.headers??null)} className="w-full mt-2 text-xs font-bold bg-slate-900 text-white rounded-full py-1.5">Reset</button>
                       </div>
                     </details>
                   </div>
-                  <div tabIndex={0} role="region" aria-label="Detailed data table, scroll to see more" className="overflow-auto max-h-[560px] focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-inset outline-none">
+                  <div tabIndex={0} role="region" aria-label="Detailed data table, scroll to see more" className="overflow-auto max-h-[560px] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset outline-none">
                     <table className="w-full text-sm">
-                      <thead className="sticky top-0 bg-stone-50 border-b border-stone-200"><tr>{displayedHeaders.map(h=>(
-                        <th key={h} scope="col" tabIndex={0} role="button" aria-sort={sortKey===h ? (sortDir==="asc" ? "ascending" : "descending") : "none"} aria-label={`${h}, sortable, ${sortKey===h ? `sorted ${sortDir==="asc"?"ascending":"descending"}` : "not sorted"}. Press Enter to sort.`} onClick={()=>{ if(sortKey===h) setSortDir(d=>d==="asc"?"desc":"asc"); else {setSortKey(h); setSortDir("asc")}}} onKeyDown={e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); if(sortKey===h) setSortDir(d=>d==="asc"?"desc":"asc"); else {setSortKey(h); setSortDir("asc")} } }} className="text-left px-3 py-2.5 font-semibold cursor-pointer whitespace-nowrap hover:bg-stone-100 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-500 outline-none">{h} <span aria-hidden="true">{sortKey===h&&(sortDir==="asc"?"▲":"▼")}</span></th>
+                      <thead className="sticky top-0 bg-slate-50 border-b border-slate-200"><tr>{displayedHeaders.map(h=>(
+                        <th key={h} scope="col" tabIndex={0} role="button" aria-sort={sortKey===h ? (sortDir==="asc" ? "ascending" : "descending") : "none"} aria-label={`${h}, sortable, ${sortKey===h ? `sorted ${sortDir==="asc"?"ascending":"descending"}` : "not sorted"}. Press Enter to sort.`} onClick={()=>{ if(sortKey===h) setSortDir(d=>d==="asc"?"desc":"asc"); else {setSortKey(h); setSortDir("asc")}}} onKeyDown={e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); if(sortKey===h) setSortDir(d=>d==="asc"?"desc":"asc"); else {setSortKey(h); setSortDir("asc")} } }} className="text-left px-3 py-2.5 font-semibold cursor-pointer whitespace-nowrap hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 outline-none">{h} <span aria-hidden="true">{sortKey===h&&(sortDir==="asc"?"▲":"▼")}</span></th>
                       ))}</tr></thead>
-                      <tbody className="divide-y divide-stone-100">
-                        {paged.length===0? <tr><td colSpan={displayedHeaders.length} className="text-center py-12"><div className="mx-auto max-w-sm"><div className="size-10 mx-auto rounded-full bg-stone-100 grid place-items-center text-stone-600">∅</div><div className="mt-2 font-semibold text-stone-700">No rows match</div><div className="text-xs text-stone-600 mt-1 truncate px-4">“{String(deferredSearch).slice(0,60)}” — try clearing search or filters</div><button onClick={()=>{setSearch(""); setSchoolFilter("All Schools")}} className="mt-3 text-xs font-semibold px-3 py-1.5 rounded-full border border-stone-200 bg-white hover:bg-stone-50">Clear filters</button></div></td></tr> : paged.map((r,i)=>(
-                          <tr key={i} className="hover:bg-stone-50">
+                      <tbody className="divide-y divide-slate-100">
+                        {paged.length===0? <tr><td colSpan={displayedHeaders.length} className="text-center py-12"><div className="mx-auto max-w-sm"><div className="size-10 mx-auto rounded-full bg-slate-100 grid place-items-center text-slate-600">∅</div><div className="mt-2 font-semibold text-slate-700">No rows match</div><div className="text-xs text-slate-600 mt-1 truncate px-4">“{String(deferredSearch).slice(0,60)}” — try clearing search or filters</div><button onClick={()=>{setSearch(""); setSchoolFilter("All Schools")}} className="mt-3 text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 bg-white hover:bg-slate-50">Clear filters</button></div></td></tr> : paged.map((r,i)=>(
+                          <tr key={i} className="hover:bg-slate-50">
                             {displayedHeaders.map(h=>{
                               const v=cleanValue(r[h]); const t=columnTypes[h]
-                              if(!v) return <td key={h} className="px-3 py-2"><span className="text-stone-600">—</span></td>
+                              if(!v) return <td key={h} className="px-3 py-2"><span className="text-slate-600">—</span></td>
                               const low=v.toLowerCase()
                               if(low==="active") return <td key={h} className="px-3 py-2"><span className="text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5">ACTIVE</span></td>
-                              if(t==="percent"){ const n=toNumber(v)??0; let bg="bg-stone-100"; if(n===0) bg="bg-red-50 border-red-200 text-red-700"; else if(n<30) bg="bg-amber-50 border-amber-200"; return <td key={h} className="px-3 py-2"><span className={`px-2 py-0.5 rounded-full border text-xs font-semibold ${bg}`}>{v}</span></td> }
+                              if(t==="percent"){ const n=toNumber(v)??0; let bg="bg-slate-100"; if(n===0) bg="bg-red-50 border-red-200 text-red-700"; else if(n<30) bg="bg-amber-50 border-amber-200"; return <td key={h} className="px-3 py-2"><span className={`px-2 py-0.5 rounded-full border text-xs font-semibold ${bg}`}>{v}</span></td> }
                               if(isIdColumn(h)) return <td key={h} className="px-3 py-2 font-mono text-xs">{v}</td>
                               if(t==="number"){ const n=toNumber(v); return <td key={h} className="px-3 py-2 font-mono text-xs">{n!==null&&n>=1000?fmt(n):v}</td> }
                               return <td key={h} className="px-3 py-2 max-w-[320px] truncate" title={v}>{v}</td>
@@ -872,11 +873,11 @@ export default function App(){
                       </tbody>
                     </table>
                   </div>
-                  <div className="px-4 py-3 bg-stone-50 border-t flex items-center justify-between text-xs"><span className="text-stone-600">Showing {(page-1)*pageSize+1}–{Math.min(page*pageSize,filtered.length)} of {fmt(filtered.length)}</span><div className="flex gap-2"><button aria-label={`Previous page, page ${page} of ${totalPages}`} disabled={page<=1} onClick={()=>setPage(p=>p-1)} className="px-3 py-1 rounded-full border bg-white disabled:opacity-40 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-violet-500">‹ Prev</button><span aria-live="polite" aria-atomic="true" className="px-3 py-1 rounded-full bg-white border">Page {page}/{totalPages}</span><button aria-label={`Next page, page ${page} of ${totalPages}`} disabled={page>=totalPages} onClick={()=>setPage(p=>p+1)} className="px-3 py-1 rounded-full border bg-white disabled:opacity-40 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-violet-500">Next ›</button></div></div>
+                  <div className="px-4 py-3 bg-slate-50 border-t flex items-center justify-between text-xs"><span className="text-slate-600">Showing {(page-1)*pageSize+1}–{Math.min(page*pageSize,filtered.length)} of {fmt(filtered.length)}</span><div className="flex gap-2"><button aria-label={`Previous page, page ${page} of ${totalPages}`} disabled={page<=1} onClick={()=>setPage(p=>p-1)} className="px-3 py-1 rounded-full border bg-white disabled:opacity-40 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-indigo-500">‹ Prev</button><span aria-live="polite" aria-atomic="true" className="px-3 py-1 rounded-full bg-white border">Page {page}/{totalPages}</span><button aria-label={`Next page, page ${page} of ${totalPages}`} disabled={page>=totalPages} onClick={()=>setPage(p=>p+1)} className="px-3 py-1 rounded-full border bg-white disabled:opacity-40 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-indigo-500">Next ›</button></div></div>
                 </div>
 
-                <div className="bg-white border border-stone-200 rounded-2xl p-4">
-                  <div className="text-sm font-bold text-stone-900">Definitions / Notes</div>
+                <div className="bg-white border border-slate-200 rounded-2xl p-4">
+                  <div className="text-sm font-bold text-slate-900">Definitions / Notes</div>
                   <div className="mt-2 grid sm:grid-cols-2 gap-2 text-xs">
                     {[
                       ["Registered Users","Total registered accounts"],
@@ -885,7 +886,7 @@ export default function App(){
                       ["Active School","School with Downloads >0"],
                       ["Downloads","Total recorded downloads"],
                     ].map(([k,v])=>(
-                      <div key={k} className="flex gap-2 border border-stone-100 rounded-xl px-3 py-2 bg-stone-50"><span className="font-semibold text-stone-800 whitespace-nowrap">{k}:</span><span className="text-stone-600">{v}</span></div>
+                      <div key={k} className="flex gap-2 border border-slate-100 rounded-xl px-3 py-2 bg-slate-50"><span className="font-semibold text-slate-800 whitespace-nowrap">{k}:</span><span className="text-slate-600">{v}</span></div>
                     ))}
                   </div>
                 </div>
@@ -895,8 +896,8 @@ export default function App(){
         )}
       </main>
 
-      {toast && <div role="status" aria-live="polite" className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-stone-900 text-white text-sm font-medium px-4 py-2.5 rounded-full shadow-xl z-50">{toast}</div>}
-      <footer className="border-t border-stone-200 mt-8 py-6 text-center text-xs text-stone-600">
+      {toast && <div role="status" aria-live="polite" className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-sm font-medium px-4 py-2.5 rounded-full shadow-xl z-50">{toast}</div>}
+      <footer className="border-t border-slate-200 mt-8 py-6 text-center text-xs text-slate-600">
         Sheetly • Monthly Visual Report System • Data → Information → Visualization → Insight • Print hides controls • All local
       </footer>
     </div>

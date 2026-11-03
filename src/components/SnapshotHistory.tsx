@@ -140,24 +140,24 @@ export default function SnapshotHistory({ sourceFile, module, reportingPeriod }:
 
   return (
     <div className="space-y-4">
-      <div className="bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-stone-200 flex flex-wrap items-center justify-between gap-3">
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="text-sm font-bold text-stone-900">SAVE CURRENT FILE AS SNAPSHOT</div>
-            <div className="text-xs text-stone-600">Validates the loaded file, stores it in R2, and records it in D1.</div>
+            <div className="text-sm font-bold text-slate-900">SAVE CURRENT FILE AS SNAPSHOT</div>
+            <div className="text-xs text-slate-600">Validates the loaded file, stores it in R2, and records it in D1.</div>
           </div>
           <button
             onClick={() => void handlePreview()}
             disabled={!sourceFile || !module || saving}
-            className="px-4 py-2 rounded-full bg-stone-900 text-white text-xs font-semibold hover:bg-stone-800 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-4 py-2 rounded-full bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {saving ? "Working…" : "Preview snapshot"}
           </button>
         </div>
-        <div className="p-4 text-xs text-stone-600">
+        <div className="p-4 text-xs text-slate-600">
           {sourceFile && module ? (
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-medium text-stone-800">{sourceFile.name}</span>
+              <span className="font-medium text-slate-800">{sourceFile.name}</span>
               <span>•</span>
               <span>{module === "school" ? "School export" : "Member export"}</span>
               <span>•</span>
@@ -174,46 +174,46 @@ export default function SnapshotHistory({ sourceFile, module, reportingPeriod }:
       </div>
 
       {preview && (
-        <div className="bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-stone-200 flex items-center justify-between gap-3">
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-3">
             <div>
-              <div className="text-sm font-bold text-stone-900">IMPORT PREVIEW</div>
-              <div className="text-xs text-stone-600">{preview.file.name} • {preview.module} • {preview.reportingPeriod}</div>
+              <div className="text-sm font-bold text-slate-900">IMPORT PREVIEW</div>
+              <div className="text-xs text-slate-600">{preview.file.name} • {preview.module} • {preview.reportingPeriod}</div>
             </div>
-            <span className="text-xs bg-violet-50 text-violet-700 border border-violet-200 rounded-full px-3 py-1">
+            <span className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full px-3 py-1">
               {preview.validation.summary.total} records
             </span>
           </div>
           <div className="p-4 space-y-3 text-xs">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <div className="rounded-xl bg-stone-50 border border-stone-200 p-3"><div className="text-stone-600">Accepted</div><div className="text-lg font-extrabold text-stone-900">{preview.validation.summary.accepted}</div></div>
+              <div className="rounded-xl bg-slate-50 border border-slate-200 p-3"><div className="text-slate-600">Accepted</div><div className="text-lg font-extrabold text-slate-900">{preview.validation.summary.accepted}</div></div>
               <div className="rounded-xl bg-amber-50 border border-amber-200 p-3"><div className="text-amber-700">Warnings</div><div className="text-lg font-extrabold text-amber-700">{preview.validation.summary.warnings}</div></div>
               <div className="rounded-xl bg-red-50 border border-red-200 p-3"><div className="text-red-700">Rejected</div><div className="text-lg font-extrabold text-red-700">{preview.validation.summary.rejected}</div></div>
-              <div className="rounded-xl bg-stone-50 border border-stone-200 p-3"><div className="text-stone-600">Checksum</div><div className="font-mono text-[11px] truncate text-stone-800">{preview.file.checksum.slice(0, 12)}…</div></div>
+              <div className="rounded-xl bg-slate-50 border border-slate-200 p-3"><div className="text-slate-600">Checksum</div><div className="font-mono text-[11px] truncate text-slate-800">{preview.file.checksum.slice(0, 12)}…</div></div>
             </div>
             {preview.validation.missingHeaders.length > 0 && <div className="rounded-xl bg-red-50 border border-red-200 text-red-700 px-3 py-2">Missing columns: {preview.validation.missingHeaders.join(", ")}</div>}
             {preview.validation.limitations.map((limitation) => <div key={limitation} className="rounded-xl bg-amber-50 border border-amber-200 text-amber-800 px-3 py-2">{limitation}</div>)}
             {preview.duplicate && <div className="rounded-xl bg-amber-50 border border-amber-200 text-amber-800 px-3 py-2">Already uploaded on {formatDate(preview.duplicate.uploadedAt)}.</div>}
             <div className="flex flex-wrap gap-2 pt-1">
               <button onClick={() => void handleCommit()} disabled={saving || preview.validation.summary.rejected > 0 || preview.validation.missingHeaders.length > 0 || !!preview.duplicate} className="px-4 py-2 rounded-full bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed">Confirm save</button>
-              <button onClick={() => setPreview(null)} disabled={saving} className="px-4 py-2 rounded-full border border-stone-200 bg-white font-medium hover:bg-stone-50 disabled:opacity-40">Cancel</button>
+              <button onClick={() => setPreview(null)} disabled={saving} className="px-4 py-2 rounded-full border border-slate-200 bg-white font-medium hover:bg-slate-50 disabled:opacity-40">Cancel</button>
             </div>
           </div>
         </div>
       )}
 
-      <div className="bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-stone-200 flex items-center justify-between gap-3">
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-3">
           <div>
-            <div className="text-sm font-bold text-stone-900">SNAPSHOT HISTORY</div>
-            <div className="text-xs text-stone-600">Saved reporting periods and import results</div>
+            <div className="text-sm font-bold text-slate-900">SNAPSHOT HISTORY</div>
+            <div className="text-xs text-slate-600">Saved reporting periods and import results</div>
           </div>
-          <button onClick={() => void load()} disabled={loading} className="px-3 py-1.5 rounded-full border border-stone-200 bg-white text-xs font-semibold hover:bg-stone-50 disabled:opacity-40">{loading ? "Loading…" : "Refresh"}</button>
+          <button onClick={() => void load()} disabled={loading} className="px-3 py-1.5 rounded-full border border-slate-200 bg-white text-xs font-semibold hover:bg-slate-50 disabled:opacity-40">{loading ? "Loading…" : "Refresh"}</button>
         </div>
         {snapshots.length ? (
           <div className="overflow-auto">
             <table className="w-full text-sm">
-              <thead className="bg-stone-50 border-b border-stone-200">
+              <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
                   <th className="text-left px-4 py-2.5 font-semibold">Period</th>
                   <th className="text-left px-4 py-2.5 font-semibold">Module</th>
@@ -223,14 +223,14 @@ export default function SnapshotHistory({ sourceFile, module, reportingPeriod }:
                   <th className="text-left px-4 py-2.5 font-semibold">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stone-100">
+              <tbody className="divide-y divide-slate-100">
                 {snapshots.map((snapshot) => (
-                  <tr key={snapshot.id} className="hover:bg-stone-50">
-                    <td className="px-4 py-2.5 font-medium text-stone-800">{snapshot.reporting_period}</td>
+                  <tr key={snapshot.id} className="hover:bg-slate-50">
+                    <td className="px-4 py-2.5 font-medium text-slate-800">{snapshot.reporting_period}</td>
                     <td className="px-4 py-2.5 capitalize">{snapshot.module}</td>
                     <td className="px-4 py-2.5 max-w-[280px] truncate" title={snapshot.original_filename}>{snapshot.original_filename}</td>
                     <td className="px-4 py-2.5 text-right font-mono">{snapshot.record_count}</td>
-                    <td className="px-4 py-2.5 text-stone-600">{formatDate(snapshot.uploaded_at)}</td>
+                    <td className="px-4 py-2.5 text-slate-600">{formatDate(snapshot.uploaded_at)}</td>
                     <td className="px-4 py-2.5"><span className="text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5">{snapshot.status}</span></td>
                   </tr>
                 ))}
@@ -239,8 +239,8 @@ export default function SnapshotHistory({ sourceFile, module, reportingPeriod }:
           </div>
         ) : (
           <div className="p-8 text-center">
-            <div className="text-sm font-semibold text-stone-800">{loading ? "Loading snapshots…" : "No saved snapshots yet"}</div>
-            <div className="text-xs text-stone-600 mt-1 max-w-lg mx-auto">Preview the loaded file above, then confirm the import to create the first baseline snapshot.</div>
+            <div className="text-sm font-semibold text-slate-800">{loading ? "Loading snapshots…" : "No saved snapshots yet"}</div>
+            <div className="text-xs text-slate-600 mt-1 max-w-lg mx-auto">Preview the loaded file above, then confirm the import to create the first baseline snapshot.</div>
           </div>
         )}
       </div>
