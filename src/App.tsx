@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
+﻿import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
 import * as XLSX from "xlsx"
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell,
@@ -118,6 +118,8 @@ export default function App(){
   const fileRef=useRef<HTMLInputElement>(null)
   const [lastUpdated,setLastUpdated]=useState<string>(()=> new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}))
   const [toast,setToast]=useState<string|null>(null)
+  const [largeText,setLargeText]=useState<boolean>(()=>{ try { return localStorage.getItem('sheetly-large-text')==="1" } catch { return false } })
+  useEffect(()=>{ document.documentElement.classList.toggle('elderly', largeText); try { localStorage.setItem('sheetly-large-text', largeText?'1':'0') } catch {} },[largeText])
   const isSearchPending = search !== deferredSearch
 
   const active = wb?.sheets[sheetIdx] ?? null
@@ -302,7 +304,7 @@ export default function App(){
             {wb && <span className="hidden xl:inline-flex ml-4 items-center gap-2 text-xs bg-white border border-stone-200 rounded-full px-3 py-1.5 shadow-sm"><span className="size-2 rounded-full bg-emerald-500 animate-pulse"/><span className="font-medium truncate max-w-[220px]">{wb.fileName}</span><span className="text-stone-600">•</span><span>{fmt(filtered.length)} rows</span><span className="text-stone-600">•</span><span className="capitalize">{datasetType}</span></span>}
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={()=>setView("admin")} className={`text-sm font-semibold px-3.5 py-2 rounded-full border transition focus-visible:ring-2 focus-visible:ring-violet-500 ${view==="admin"?"bg-stone-900 text-white border-stone-900":"border-stone-200 bg-white hover:bg-stone-50"}`}>Admin</button>
+            <button onClick={()=>setLargeText(v=>!v)} aria-pressed={largeText} title="Toggle larger text for easier reading" className={`text-sm font-semibold px-3.5 py-2 rounded-full border transition focus-visible:ring-2 focus-visible:ring-violet-500 ${largeText?"bg-violet-600 text-white border-violet-600":"border-stone-200 bg-white hover:bg-stone-50"}`}>Aa {largeText?"Large":"Normal"}</button>`n            <button onClick={()=>setView("admin")} className={`text-sm font-semibold px-3.5 py-2 rounded-full border transition focus-visible:ring-2 focus-visible:ring-violet-500 ${view==="admin"?"bg-stone-900 text-white border-stone-900":"border-stone-200 bg-white hover:bg-stone-50"}`}>Admin</button>
             {wb?(
               <>
                 <div className="hidden lg:flex items-center gap-2 text-xs">
@@ -327,7 +329,7 @@ export default function App(){
           <nav aria-label="Report sections" className="max-w-[1440px] mx-auto px-4 sm:px-6 flex flex-wrap items-center gap-2 py-2.5 border-t border-stone-100">
             <div role="tablist" aria-label="Report views" className="flex items-center gap-1.5 bg-white border border-stone-200 rounded-full p-1 shadow-sm">
               {(["dashboard","school","users","comparison","trends","data","admin"] as View[]).map(v=>(
-                <button key={v} role="tab" aria-selected={view===v} aria-controls={`panel-${v}`} id={`tab-${v}`} onClick={()=>setView(v)} className={`px-3.5 py-1.5 rounded-full text-xs font-bold capitalize tracking-wide transition focus-visible:ring-2 focus-visible:ring-violet-500 ${view===v?"bg-stone-900 text-white shadow":"text-stone-600 hover:bg-stone-50"}`}>
+                <button key={v} role="tab" aria-selected={view===v} aria-controls={`panel-${v}`} id={`tab-${v}`} onClick={()=>setView(v)} className={`px-4 py-2 rounded-full text-sm font-bold capitalize tracking-wide transition focus-visible:ring-2 focus-visible:ring-violet-500 ${view===v?"bg-stone-900 text-white shadow":"text-stone-600 hover:bg-stone-50"}`}>
                   {v==="dashboard"?"Dashboard":v==="school"?"School Analysis":v==="users"?"User Analysis":v==="comparison"?"School Comparison":v==="trends"?"Snapshot History":v==="admin"?"Admin":"Detailed Data"}
                 </button>
               ))}
