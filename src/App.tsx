@@ -1,4 +1,4 @@
-﻿import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
 import * as XLSX from "xlsx"
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell,
@@ -118,8 +118,6 @@ export default function App(){
   const fileRef=useRef<HTMLInputElement>(null)
   const [lastUpdated,setLastUpdated]=useState<string>(()=> new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}))
   const [toast,setToast]=useState<string|null>(null)
-  const [largeText,setLargeText]=useState<boolean>(()=>{ try { return localStorage.getItem('sheetly-large-text')==="1" } catch { return false } })
-  useEffect(()=>{ document.documentElement.classList.toggle('elderly', largeText); try { localStorage.setItem('sheetly-large-text', largeText?'1':'0') } catch {} },[largeText])
   const isSearchPending = search !== deferredSearch
 
   const active = wb?.sheets[sheetIdx] ?? null
@@ -304,7 +302,6 @@ export default function App(){
             {wb && <span className="hidden xl:inline-flex ml-4 items-center gap-2 text-xs bg-white border border-slate-200 rounded-full px-3 py-1.5 shadow-sm"><span className="size-2 rounded-full bg-emerald-500 animate-pulse"/><span className="font-medium truncate max-w-[220px]">{wb.fileName}</span><span className="text-slate-600">•</span><span>{fmt(filtered.length)} rows</span><span className="text-slate-600">•</span><span className="capitalize">{datasetType}</span></span>}
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={()=>setLargeText(v=>!v)} aria-pressed={largeText} title="Toggle larger text for easier reading" className={`text-sm font-semibold px-3.5 py-2 rounded-full border transition focus-visible:ring-2 focus-visible:ring-indigo-500 ${largeText?"bg-indigo-600 text-white border-indigo-600":"border-slate-200 bg-white hover:bg-slate-50"}`}>Aa {largeText?"Large":"Normal"}</button>
             <button onClick={()=>setView("admin")} className={`text-sm font-semibold px-3.5 py-2 rounded-full border transition focus-visible:ring-2 focus-visible:ring-indigo-500 ${view==="admin"?"bg-slate-900 text-white border-slate-900":"border-slate-200 bg-white hover:bg-slate-50"}`}>Admin</button>
             {wb?(
               <>
@@ -416,7 +413,7 @@ export default function App(){
                   {title:"LR Portal — Registered Users", file:"/samples/sample-registered.xls", name:"LR Portal Registered Users.xls", desc:"7 users • Gender, Role, Downloads, Registered date", meta:"7 rows • 10 cols", accent:"from-indigo-600 to-blue-500", icon:"👥"},
                 ].map(c=>(
                   <button key={c.file} onClick={()=>loadSample(c.file,c.name)} className="text-left bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-slate-300 flex gap-4">
-                    <div className={`size-12 rounded-2xl bg-gradient-to-br ${c.accent} grid place-items-center text-white`}>{c.icon}</div>
+                    <div className={`size-12 rounded-2xl bg-gradient-to-br ${c.accent} grid place-items-center text-white`}>{c.icon==="school"?<svg className="size-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 9h.01M9 13h.01M9 17h.01M15 9h.01M15 13h.01M15 17h.01"/></svg>:<svg className="size-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>}</div>
                     <div className="flex-1 min-w-0"><div className="font-semibold text-slate-900">{c.title}</div><div className="text-xs text-slate-600 mt-1">{c.desc}</div><div className="mt-2 inline-flex text-[11px] font-medium bg-slate-900 text-white px-2.5 py-1 rounded-full">Load → <span className="opacity-60">{c.meta}</span></div></div>
                   </button>
                 ))}
