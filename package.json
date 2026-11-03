@@ -10,8 +10,12 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "typecheck": "tsc -b",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "preview:worker": "pnpm build && wrangler pages dev dist",
+    "db:migrate:local": "wrangler d1 migrations apply sheetly-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply sheetly-db --remote"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
@@ -22,12 +26,14 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261102.1",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
     "oxlint": "^1.81.0",
     "typescript": "~6.0.2",
-    "vite": "^8.3.0"
+    "vite": "^8.3.0",
+    "wrangler": "^4.156.2"
   }
 }

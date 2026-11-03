@@ -1,0 +1,14 @@
+name = "sheetly"
+compatibility_date = "2026-11-03"
+pages_build_output_dir = "./dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "sheetly-db"
+database_id = "508ac493-5607-4cd3-9f82-f7199d0c9bd8"
+
+# Create the bucket with:
+#   wrangler r2 bucket create sheetly-uploads
+[[r2_buckets]]
+binding = "UPLOADS"
+bucket_name = "sheetly-uploads"

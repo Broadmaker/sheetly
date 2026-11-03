@@ -25,3 +25,12 @@ dist-ssr
 
 # Private data - don't commit real LR Portal exports
 LR PORTAL*.xls
+files/
+*.xls
+*.xlsx
+!public/samples/*.xls
+!public/samples/*.xlsx
+
+# Cloudflare local state and secrets
+.wrangler/
+.dev.vars

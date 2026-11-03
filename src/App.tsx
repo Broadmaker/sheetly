@@ -2,34 +2,28 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
 import * as XLSX from "xlsx"
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell,
-  LineChart, Line, AreaChart, Area
+  AreaChart, Area
 } from "recharts"
+import {
+  cleanValue,
+  isDateLike,
+  parseDate,
+  parseWorkbookBuffer,
+  toNumber,
+  type WorkbookData,
+} from "./lib/workbook"
+import SnapshotHistory from "./components/SnapshotHistory"
+import SchoolComparison from "./components/SchoolComparison"
+import AdminPanel from "./components/AdminPanel"
 
 // Types
-type SheetData = { name: string; headers: string[]; rows: Record<string, any>[]; raw: any[][] }
-type WorkbookData = { fileName: string; sheets: SheetData[] }
-type View = "dashboard" | "school" | "users" | "trends" | "data"
+type View = "dashboard" | "school" | "users" | "comparison" | "trends" | "data" | "admin"
 type ColType = "number" | "percent" | "date" | "string"
 
 const COLORS = ["#7c3aed","#f97316","#06b6d4","#10b981","#e11d48","#8b5cf6","#f59e0b","#14b8a6","#6366f1","#ec4899"]
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"]
 
 // ---------- helpers ----------
-function cleanValue(v: any): string { if (v == null) return ""; return String(v).trim().replace(/\s+/g, " ") }
-function toNumber(v: any): number | null {
-  if (v === "" || v == null) return null
-  const s = String(v).trim().replace(/,/g, "").replace(/%/g, "").replace(/\s/g, "")
-  if (s === "" || s === "-" || s === "--") return null
-  const n = Number(s); return Number.isFinite(n) ? n : null
-}
-function isDateLike(v: any): boolean {
-  if (v instanceof Date && !isNaN(v.getTime())) return true
-  const s = String(v).trim(); if (!s) return false
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return !isNaN(Date.parse(s))
-  if (/^\d{1,2}\/\d{1,2}\/\d{2,4}/.test(s)) return !isNaN(Date.parse(s))
-  return false
-}
-function parseDate(v: any): Date | null { if (v instanceof Date) return isNaN(v.getTime()) ? null : v; const s=String(v).trim(); if(!s) return null; const d=new Date(s); return isNaN(d.getTime())?null:d }
 function fmt(n: number) { return n.toLocaleString("en-US") }
 function fmtCompact(n: number) { if (n>=1_000_000) return (n/1_000_000).toFixed(2).replace(/\.00$/,"")+"M"; if(n>=1000) return (n/1000).toFixed(1).replace(/\.0$/,"")+"k"; return fmt(Math.round(n)) }
 function isIdColumn(h:string){ return /\bid\b/i.test(h) }
@@ -56,26 +50,7 @@ function parseWorkbook(file:File):Promise<WorkbookData>{
     const reader=new FileReader()
     reader.onload=e=>{
       try{
-        const wb=XLSX.read(e.target?.result,{type:"array",cellDates:true})
-        const sheets:SheetData[]=wb.SheetNames.map(name=>{
-          const ws=wb.Sheets[name]
-          const raw:any[][]=XLSX.utils.sheet_to_json(ws,{header:1,defval:"",blankrows:false,raw:true}) as any[][]
-          if(!raw.length) return {name,headers:[],rows:[],raw}
-          let headerIdx=0
-          for(let i=0;i<Math.min(6,raw.length);i++){ const ne=raw[i].filter((c:any)=>cleanValue(c)!=="").length; if(ne>=2){headerIdx=i;break} }
-          const rawHeaders=raw[headerIdx].map((h:any)=>cleanValue(h))
-          const colCount=Math.max(...raw.slice(headerIdx).map(r=>r.length),rawHeaders.length)
-          while(rawHeaders.length<colCount) rawHeaders.push("")
-          const keepIdx:number[]=[]
-          for(let c=0;c<colCount;c++){ const hasH=cleanValue(rawHeaders[c])!==""; let hasD=false; for(let r=headerIdx+1;r<raw.length;r++){ if(cleanValue(raw[r]?.[c])!==""){hasD=true;break} } if(!hasH&&!hasD) continue; keepIdx.push(c) }
-          const finalIdx=keepIdx.length?keepIdx:rawHeaders.map((_,i)=>i)
-          const headersRaw=finalIdx.map(i=>cleanValue(rawHeaders[i])||`Column ${i+1}`)
-          const seen:Record<string,number>={}; const headers=headersRaw.map(h=>{ const b=h.trim()||"Column"; if(seen[b]==null){seen[b]=1;return b} seen[b]++; return `${b} ${seen[b]}` })
-          const rows:Record<string,any>[]=[]
-          for(let r=headerIdx+1;r<raw.length;r++){ const arr=raw[r]||[]; if(arr.every(c=>cleanValue(c)==="")) continue; if(!finalIdx.some(i=>cleanValue(arr[i])!=="")) continue; const obj:Record<string,any>={}; headers.forEach((h,idx)=>{ const colI=finalIdx[idx]; let v:any=arr[colI]??""; if(v instanceof Date) v=v.toISOString().slice(0,10); else v=cleanValue(v); obj[h]=v }); rows.push(obj) }
-          return {name,headers,rows,raw}
-        })
-        resolve({fileName:file.name,sheets})
+        resolve(parseWorkbookBuffer(e.target?.result as ArrayBuffer,file.name))
       }catch(err){reject(err)}
     }
     reader.onerror=reject; reader.readAsArrayBuffer(file)
@@ -124,6 +99,7 @@ function activityBucket(n:number){
 
 export default function App(){
   const [wb,setWb]=useState<WorkbookData|null>(null)
+  const [sourceFile,setSourceFile]=useState<File|null>(null)
   const [sheetIdx,setSheetIdx]=useState(0)
   const [view,setView]=useState<View>("dashboard")
   const [loading,setLoading]=useState(false)
@@ -146,11 +122,13 @@ export default function App(){
 
   const active = wb?.sheets[sheetIdx] ?? null
   const datasetType = useMemo(()=> active? detectType(active.headers):"generic", [active])
+  const snapshotModule: "school" | "member" | null = datasetType==="school"?"school":datasetType==="user"?"member":null
+  const reportingPeriod = useMemo(()=> `${reportingYear}-${String(MONTHS.indexOf(reportingMonth)+1).padStart(2,"0")}`, [reportingMonth,reportingYear])
 
   async function loadFile(file:File){
     setLoading(true)
     try{
-      const data=await parseWorkbook(file); setWb(data); setSheetIdx(0); setView("dashboard"); setVisibleCols(null); setSearch(""); setSortKey(""); setPage(1)
+      const data=await parseWorkbook(file); setWb(data); setSourceFile(file); setSheetIdx(0); setView("dashboard"); setVisibleCols(null); setSearch(""); setSortKey(""); setPage(1)
       setLastUpdated(new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}))
       // try to infer month from filename e.g. 20260916
       const m=file.name.match(/20\d{2}(\d{2})(\d{2})/)
@@ -162,7 +140,7 @@ export default function App(){
     try{
       const res=await fetch(url); if(!res.ok) throw new Error(String(res.status))
       const buf=await res.arrayBuffer(); const f=new File([buf],name,{type:"application/vnd.ms-excel"})
-      const data=await parseWorkbook(f); data.fileName=name; setWb(data); setSheetIdx(0); setView("dashboard"); setVisibleCols(null)
+      const data=await parseWorkbook(f); data.fileName=name; setWb(data); setSourceFile(f); setSheetIdx(0); setView("dashboard"); setVisibleCols(null)
       setLastUpdated(new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}))
     }catch(e){ console.error(e); alert("Sample load failed") } finally{setLoading(false)}
   }
@@ -261,36 +239,6 @@ export default function App(){
     return Object.entries(buckets).map(([name,value])=>({name,value}))
   },[active,datasetType,filtered])
 
-  // Monthly trend synthetic or from history (simple deterministic based on current totals)
-  const trendData=useMemo(()=>{
-    // generate Jan-Sep trend from current totalDownloads
-    const base = schoolKPIs? schoolKPIs.totalDownloads : userKPIs? userKPIs.totalDownloads : (genericSummary[0]?.sum ?? 1000)
-    const baseReg = schoolKPIs? schoolKPIs.totalRegistered : (schoolKPIs? 0 : 0)
-    const months = MONTHS.slice(0,9) // Jan-Sep
-    // deterministic pseudo-random variation
-    const variation=[0.72,0.78,0.85,0.88,0.92,0.95,0.97,0.99,1.0]
-    return months.map((m,i)=>({
-      month: m.slice(0,3),
-      downloads: Math.round(base * variation[i]),
-      registered: baseReg? Math.round(baseReg*variation[i]) : undefined,
-      schools: schoolKPIs? Math.round(schoolKPIs.totalSchools* (0.9+0.1*variation[i])):undefined
-    }))
-  },[schoolKPIs,userKPIs,genericSummary])
-
-  // Monthly comparison
-  const comparison=useMemo(()=>{
-    if(!trendData.length) return null
-    const cur=trendData[trendData.length-1]; const prev=trendData[trendData.length-2]
-    if(!prev) return null
-    const chg = (curV:number, prevV:number)=> prevV? ((curV-prevV)/prevV*100):0
-    return {
-      cur, prev,
-      downloadsChange: chg(cur.downloads, prev.downloads),
-      registeredChange: cur.registered&&prev.registered? chg(cur.registered, prev.registered):null,
-      schoolsChange: cur.schools&&prev.schools? cur.schools - prev.schools : null
-    }
-  },[trendData])
-
   // Data quality
   const quality=useMemo(()=>{
     if(!active) return null
@@ -354,6 +302,7 @@ export default function App(){
             {wb && <span className="hidden xl:inline-flex ml-4 items-center gap-2 text-xs bg-white border border-stone-200 rounded-full px-3 py-1.5 shadow-sm"><span className="size-2 rounded-full bg-emerald-500 animate-pulse"/><span className="font-medium truncate max-w-[220px]">{wb.fileName}</span><span className="text-stone-600">•</span><span>{fmt(filtered.length)} rows</span><span className="text-stone-600">•</span><span className="capitalize">{datasetType}</span></span>}
           </div>
           <div className="flex items-center gap-2">
+            <button onClick={()=>setView("admin")} className={`text-sm font-semibold px-3.5 py-2 rounded-full border transition focus-visible:ring-2 focus-visible:ring-violet-500 ${view==="admin"?"bg-stone-900 text-white border-stone-900":"border-stone-200 bg-white hover:bg-stone-50"}`}>Admin</button>
             {wb?(
               <>
                 <div className="hidden lg:flex items-center gap-2 text-xs">
@@ -366,7 +315,7 @@ export default function App(){
                     <option>2024</option><option>2025</option><option>2026</option>
                   </select>
                 </div>
-                <button onClick={()=>setWb(null)} className="hidden sm:inline-flex text-sm font-medium px-3.5 py-2 rounded-full border border-stone-200 bg-white hover:bg-stone-50 focus-visible:ring-2 focus-visible:ring-violet-500">New file</button>
+                <button onClick={()=>{setWb(null); setSourceFile(null)}} className="hidden sm:inline-flex text-sm font-medium px-3.5 py-2 rounded-full border border-stone-200 bg-white hover:bg-stone-50 focus-visible:ring-2 focus-visible:ring-violet-500">New file</button>
                 <button onClick={()=>window.print()} className="inline-flex text-sm font-semibold px-4 py-2 rounded-full bg-stone-900 text-white hover:bg-stone-800 shadow focus-visible:ring-2 focus-visible:ring-violet-500">Print / PDF</button>
               </>
             ):(
@@ -377,9 +326,9 @@ export default function App(){
         {wb && (
           <nav aria-label="Report sections" className="max-w-[1440px] mx-auto px-4 sm:px-6 flex flex-wrap items-center gap-2 py-2.5 border-t border-stone-100">
             <div role="tablist" aria-label="Report views" className="flex items-center gap-1.5 bg-white border border-stone-200 rounded-full p-1 shadow-sm">
-              {(["dashboard","school","users","trends","data"] as View[]).map(v=>(
+              {(["dashboard","school","users","comparison","trends","data","admin"] as View[]).map(v=>(
                 <button key={v} role="tab" aria-selected={view===v} aria-controls={`panel-${v}`} id={`tab-${v}`} onClick={()=>setView(v)} className={`px-3.5 py-1.5 rounded-full text-xs font-bold capitalize tracking-wide transition focus-visible:ring-2 focus-visible:ring-violet-500 ${view===v?"bg-stone-900 text-white shadow":"text-stone-600 hover:bg-stone-50"}`}>
-                  {v==="dashboard"?"Dashboard":v==="school"?"School Analysis":v==="users"?"User Analysis":v==="trends"?"Monthly Trends":"Detailed Data"}
+                  {v==="dashboard"?"Dashboard":v==="school"?"School Analysis":v==="users"?"User Analysis":v==="comparison"?"School Comparison":v==="trends"?"Snapshot History":v==="admin"?"Admin":"Detailed Data"}
                 </button>
               ))}
             </div>
@@ -404,19 +353,23 @@ export default function App(){
       </header>
 
       <main id="main-content" className="max-w-[1440px] mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        {!wb?(
+        {view==="admin" ? (
+          <div id="panel-admin" role="tabpanel" aria-labelledby="tab-admin" tabIndex={0} className="outline-none">
+            <AdminPanel onOpenComparison={()=>setView("comparison")} onBack={()=>setView("dashboard")} />
+          </div>
+        ) : !wb?(
           <div className="space-y-8">
             <div className="grid lg:grid-cols-[1.05fr_0.95fr] gap-6 sm:gap-8 items-start">
               <div className="pt-2 sm:pt-4">
                 <div className="inline-flex items-center gap-2 text-xs font-semibold tracking-widest uppercase bg-white border border-stone-200 rounded-full px-3 py-1.5 shadow-sm"><span className="size-2 rounded-full bg-violet-600"/> Monthly Visual Report System • Sept 2026</div>
                 <h1 className="mt-4 text-[30px] sm:text-[40px] font-extrabold tracking-tight leading-[0.95] text-stone-900">Monthly <span className="bg-gradient-to-br from-violet-600 to-orange-500 bg-clip-text text-transparent">Visual Monitoring</span> for LR Portal</h1>
-                <p className="mt-4 text-[14.5px] leading-6 text-stone-600 max-w-[620px]">Drop your <b className="text-stone-900">Utilization</b> or <b className="text-stone-900">Registered Users</b> Excel — get the spec Dashboard with 5 KPIs, trends, Top-10, activity distribution, validation & quality checks. All local.</p>
+                <p className="mt-4 text-[14.5px] leading-6 text-stone-600 max-w-[620px]">Drop your <b className="text-stone-900">Utilization</b> or <b className="text-stone-900">Registered Users</b> Excel — get the spec Dashboard with 5 KPIs, rankings, activity distribution, validation & quality checks. All local.</p>
                 <div className="mt-6 flex flex-wrap gap-2">
                   <a href="#samples" className="inline-flex items-center gap-2 text-sm font-semibold bg-stone-900 text-white px-4 py-2.5 rounded-full hover:bg-stone-800">Try a sample ↓</a>
                   <span className="inline-flex items-center gap-2 text-xs text-stone-600 bg-white border border-stone-200 rounded-full px-3 py-2">XLSX via SheetJS • Recharts</span>
                 </div>
                 <div className="mt-8 grid grid-cols-3 gap-3 max-w-[560px]">
-                  {[{k:"Dashboard",v:"KPI + Trend",s:"5 KPIs, Δ vs prev"},{k:"School",v:"Top 10",s:"filterable ranking"},{k:"Quality",v:"Validation",s:"9 checks"}].map(x=>(
+                  {[{k:"Dashboard",v:"KPI cards",s:"current snapshot"},{k:"School",v:"Top 10",s:"filterable ranking"},{k:"Quality",v:"Validation",s:"9 checks"}].map(x=>(
                     <div key={x.k} className="bg-white border border-stone-200 rounded-2xl p-3 shadow-sm">
                       <div className="text-[11px] tracking-widest uppercase font-bold text-stone-600">{x.k}</div>
                       <div className="text-[15px] font-bold text-stone-900 mt-1">{x.v}</div>
@@ -468,7 +421,7 @@ export default function App(){
             </div>
             <div className="grid md:grid-cols-4 gap-3">
               {[
-                {t:"KPI change",d:"Δ vs previous month auto-calculated (pp vs %)"},
+                {t:"Snapshot history",d:"Historical comparison requires saved snapshots"},
                 {t:"Data bars",d:"Downloads bars + participation scale"},
                 {t:"Validation",d:"9 checks before presenting"},
                 {t:"Quality",d:"Complete / missing / dup / status"},
@@ -519,11 +472,11 @@ export default function App(){
                 {!loading && datasetType==="school" && schoolKPIs && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                     {[
-                      {label:"Total Schools", value:fmt(schoolKPIs.totalSchools), sub: schoolFilter!=="All Schools"? `filtered of ${fmt(schoolKPIs.overall.totalSchools)}`:`all schools`, delta: comparison?.schoolsChange!=null? `${comparison.schoolsChange>0?"+":""}${comparison.schoolsChange} vs Aug`:"vs previous", color:"from-violet-600 to-indigo-500"},
-                      {label:"Registered Users", value:fmt(schoolKPIs.totalRegistered), sub:`active ${fmt(schoolKPIs.totalActual)} • avg ${fmt(Math.round(schoolKPIs.totalRegistered/schoolKPIs.totalSchools))}/school`, delta: comparison?.registeredChange!=null? `${comparison.registeredChange>0?"▲":"▼"} ${Math.abs(comparison.registeredChange).toFixed(1)}% vs Aug`:"auto vs prev month", color:"from-sky-500 to-cyan-500"},
+                      {label:"Total Schools", value:fmt(schoolKPIs.totalSchools), sub: schoolFilter!=="All Schools"? `filtered of ${fmt(schoolKPIs.overall.totalSchools)}`:`all schools`, delta: schoolFilter!=="All Schools"?"filtered view":"current file", color:"from-violet-600 to-indigo-500"},
+                      {label:"Registered Users", value:fmt(schoolKPIs.totalRegistered), sub:`active ${fmt(schoolKPIs.totalActual)} • avg ${fmt(Math.round(schoolKPIs.totalRegistered/schoolKPIs.totalSchools))}/school`, delta:"current file", color:"from-sky-500 to-cyan-500"},
                       {label:"Active / Actual Users", value:fmt(schoolKPIs.totalActual), sub:`${schoolKPIs.totalRegistered? ((schoolKPIs.totalActual/schoolKPIs.totalRegistered*100).toFixed(1)):"0"}% of registered`, delta: schoolKPIs.totalActual===0?"0 — check data":`${fmt(schoolKPIs.activeSchools)} active schools`, color:"from-emerald-500 to-teal-500"},
-                      {label:"Participation Rate", value: schoolKPIs.avgParticipation.toFixed(1)+"%", sub: schoolKPIs.avgParticipation===0?"0% — all 0% in file":`overall participation`, delta: schoolKPIs.avgParticipation===0?"no change":`Δ ${(schoolKPIs.avgParticipation-0).toFixed(1)} pp`, color:"from-amber-500 to-orange-500"},
-                      {label:"Total Downloads", value:fmtCompact(schoolKPIs.totalDownloads), sub:`avg ${fmt(Math.round(schoolKPIs.avgDownloads))} • max ${fmtCompact(schoolKPIs.maxDownloads)}`, delta: comparison? `${comparison.downloadsChange>0?"▲":"▼"} ${Math.abs(comparison.downloadsChange).toFixed(1)}% vs Aug`:"auto", color:"from-fuchsia-600 to-pink-500"},
+                      {label:"Participation Rate", value: schoolKPIs.avgParticipation.toFixed(1)+"%", sub: schoolKPIs.avgParticipation===0?"0% — all 0% in file":`overall participation`, delta:"current file", color:"from-amber-500 to-orange-500"},
+                      {label:"Total Downloads", value:fmtCompact(schoolKPIs.totalDownloads), sub:`avg ${fmt(Math.round(schoolKPIs.avgDownloads))} • max ${fmtCompact(schoolKPIs.maxDownloads)}`, delta:"current file", color:"from-fuchsia-600 to-pink-500"},
                     ].map(k=>(
                       <div key={k.label} className="bg-white border border-stone-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition min-w-0">
                         <div className="text-[11px] font-bold tracking-[0.14em] uppercase text-stone-600 truncate">{k.label}</div>
@@ -561,24 +514,15 @@ export default function App(){
                   </div>
                 )}
 
-                {/* Monthly Trend per spec 6 */}
+                {/* Historical trend requires persisted snapshots */}
                 <div className="bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden">
                   <div className="px-5 py-4 border-b border-stone-200 flex items-center justify-between gap-3">
-                    <div><div className="text-sm font-bold text-stone-900">MONTHLY TREND</div><div className="text-xs text-stone-600">Registered • Active • Downloads • Schools (auto-updates when new month added)</div></div>
-                    <span className="text-xs bg-stone-900 text-white rounded-full px-3 py-1.5">Jan – Sep 2026</span>
+                    <div><div className="text-sm font-bold text-stone-900">HISTORICAL TREND</div><div className="text-xs text-stone-600">Requires at least two saved reporting snapshots</div></div>
+                    <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-3 py-1.5">Baseline only</span>
                   </div>
-                  <div className="h-[300px] p-3" role="img" aria-label={`Monthly trend showing downloads from Jan to Sep, total ${fmtCompact(trendData[trendData.length-1]?.downloads ?? 0)} downloads`}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={trendData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f4"/>
-                        <XAxis dataKey="month" tick={{fontSize:11}}/>
-                        <YAxis tick={{fontSize:11}} tickFormatter={(v:number)=> fmtCompact(v)}/>
-                        <Tooltip content={<Tip/>}/>
-                        <Line type="monotone" dataKey="downloads" name="Downloads" stroke="#7c3aed" strokeWidth={2.5} dot={{r:3}}/>
-                        {trendData[0]?.registered!=null && <Line type="monotone" dataKey="registered" name="Registered Users" stroke="#06b6d4" strokeWidth={2} dot={false}/>}
-                        {trendData[0]?.schools!=null && <Line type="monotone" dataKey="schools" name="Schools" stroke="#10b981" strokeWidth={2} dot={false}/>}
-                      </LineChart>
-                    </ResponsiveContainer>
+                  <div className="p-8 text-center">
+                    <div className="text-sm font-semibold text-stone-800">No previous snapshot available</div>
+                    <div className="text-xs text-stone-600 mt-1 max-w-md mx-auto">This upload is treated as the current baseline. Historical charts will appear after snapshot storage and a later upload are added.</div>
                   </div>
                 </div>
 
@@ -652,36 +596,23 @@ export default function App(){
                   </div>
                 </div>
 
-                {/* Monthly Comparison per spec 17 */}
+                {/* Snapshot comparison requires persisted snapshots */}
                 <div className="bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden">
                   <div className="px-5 py-4 border-b border-stone-200 flex items-center justify-between">
-                    <div><div className="text-sm font-bold text-stone-900">MONTHLY COMPARISON — Current vs Previous Month</div><div className="text-xs text-stone-600">Percentage change vs percentage-point change correctly distinguished</div></div>
-                    <span className="text-xs bg-stone-50 border border-stone-200 rounded-full px-3 py-1">{trendData[trendData.length-2]?.month} → {trendData[trendData.length-1]?.month}</span>
+                    <div><div className="text-sm font-bold text-stone-900">SNAPSHOT COMPARISON</div><div className="text-xs text-stone-600">Current vs. previous reporting period</div></div>
+                    <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-3 py-1">Not available</span>
                   </div>
-                  <div className="overflow-auto">
-                    <table className="w-full text-sm">
-                      <thead className="bg-stone-50 border-b border-stone-200"><tr><th className="text-left px-4 py-2.5 font-semibold">Metric</th><th className="text-right px-4 py-2.5">Previous Month</th><th className="text-right px-4 py-2.5">Current Month</th><th className="text-right px-4 py-2.5">Change</th></tr></thead>
-                      <tbody className="divide-y divide-stone-100">
-                        {[
-                          {m:"Schools", prev: comparison?.prev.schools??0, cur: comparison?.cur.schools??0, fmt:(v:number)=>fmt(v), change: comparison?.schoolsChange!=null? `${comparison.schoolsChange>0?"+":""}${comparison.schoolsChange}`:"—"},
-                          {m:"Registered Users", prev: comparison?.prev.registered??0, cur: comparison?.cur.registered??0, fmt:fmt, change: comparison?.registeredChange!=null? `${comparison.registeredChange>0?"▲":"▼"} ${Math.abs(comparison.registeredChange).toFixed(1)}%`:"—"},
-                          {m:"Active Users", prev: schoolKPIs? Math.round((schoolKPIs.totalActual*0.96)) : 0, cur: schoolKPIs?.totalActual??0, fmt:fmt, change: "—"},
-                          {m:"Participation", prev: schoolKPIs? (schoolKPIs.avgParticipation*0.96).toFixed(1)+"%": "0%", cur: schoolKPIs? schoolKPIs.avgParticipation.toFixed(1)+"%":"0%", fmt:(v:any)=>String(v), change: schoolKPIs? `+${(schoolKPIs.avgParticipation*0.04).toFixed(1)} pp`:"—"},
-                          {m:"Downloads", prev: comparison?.prev.downloads??0, cur: comparison?.cur.downloads??0, fmt:fmt, change: comparison? `${comparison.downloadsChange>0?"▲":"▼"} ${Math.abs(comparison.downloadsChange).toFixed(1)}%`:"—"},
-                        ].map(r=>(
-                          <tr key={r.m} className="hover:bg-stone-50"><td className="px-4 py-2.5 font-medium text-stone-800">{r.m}</td><td className="px-4 py-2.5 text-right font-mono">{typeof r.prev==="number"? r.fmt(r.prev as number):r.prev}</td><td className="px-4 py-2.5 text-right font-mono font-bold">{typeof r.cur==="number"? r.fmt(r.cur as number):r.cur}</td><td className={`px-4 py-2.5 text-right font-semibold ${String(r.change).startsWith("▲")||String(r.change).startsWith("+")?"text-emerald-600":String(r.change).startsWith("▼")?"text-red-600":"text-stone-600"}`}>{r.change}</td></tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="p-8 text-center">
+                    <div className="text-sm font-semibold text-stone-800">No comparison can be calculated yet</div>
+                    <div className="text-xs text-stone-600 mt-1 max-w-md mx-auto">The current file is the baseline. Upload a later export and save snapshots to enable increased, decreased, and unchanged comparisons.</div>
                   </div>
-                  <div className="px-5 py-3 bg-amber-50 border-t border-amber-200 text-xs text-amber-800">Note: For percentages, change is in percentage-points (pp), not percent change — e.g., 14.9% → 16.3% = +1.4 pp.</div>
                 </div>
 
                 {/* Filters summary footer per spec 26 */}
                 <div className="grid md:grid-cols-3 gap-3">
-                  <div className="bg-white border border-stone-200 rounded-2xl p-4"><div className="text-sm font-bold text-stone-900">Filters Active</div><div className="text-xs text-stone-600 mt-1">Month: <b className="text-stone-700">{reportingMonth} {reportingYear}</b> • School: <b className="text-stone-700">{schoolFilter}</b> • Metric: <b className="text-stone-700">{rankingMetric}</b> — changing month updates KPIs, charts, rankings & tables.</div></div>
+                  <div className="bg-white border border-stone-200 rounded-2xl p-4"><div className="text-sm font-bold text-stone-900">Filters Active</div><div className="text-xs text-stone-600 mt-1">Month: <b className="text-stone-700">{reportingMonth} {reportingYear}</b> • School: <b className="text-stone-700">{schoolFilter}</b> • Metric: <b className="text-stone-700">{rankingMetric}</b> — school metrics reflect the current file; the month applies to registration-based figures.</div></div>
                   <div className="bg-white border border-stone-200 rounded-2xl p-4"><div className="text-sm font-bold text-stone-900">Data → Information → Insight</div><div className="text-xs text-stone-600 mt-1">What is status? What changed? Which schools most active? Which need attention? Why? Then drill to detail.</div></div>
-                  <div className="bg-white border border-stone-200 rounded-2xl p-4"><div className="text-sm font-bold text-stone-900">Update Procedure</div><div className="text-xs text-stone-600 mt-1">1. Import new month • 2. Select period • 3. Review validation • 4. Open Dashboard • 5. Export / present — chart ranges & KPIs auto-update.</div></div>
+                  <div className="bg-white border border-stone-200 rounded-2xl p-4"><div className="text-sm font-bold text-stone-900">Update Procedure</div><div className="text-xs text-stone-600 mt-1">1. Import the latest export • 2. Confirm the reporting period • 3. Review validation • 4. Open the Dashboard • 5. Export or present.</div></div>
                 </div>
               </div>
             )}
@@ -844,42 +775,15 @@ export default function App(){
               </div>
             )}
 
+            {view==="comparison" && (
+              <div id="panel-comparison" role="tabpanel" aria-labelledby="tab-comparison" tabIndex={0} className="space-y-4 outline-none">
+                <SchoolComparison />
+              </div>
+            )}
+
             {view==="trends" && (
               <div id="panel-trends" role="tabpanel" aria-labelledby="tab-trends" tabIndex={0} className="space-y-4 outline-none">
-                <div className="bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden">
-                  <div className="px-5 py-4 border-b border-stone-200"><div className="text-sm font-bold text-stone-900">Monthly Overview — totals & month-to-month comparison</div><div className="text-xs text-stone-600">Historical trend • add new month via import, chart auto-updates</div></div>
-                  <div className="h-[340px] p-3">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={trendData}><CartesianGrid strokeDasharray="3 3" stroke="#f5f5f4"/><XAxis dataKey="month" tick={{fontSize:11}}/><YAxis tick={{fontSize:11}} tickFormatter={fmtCompact}/><Tooltip content={<Tip/>}/><Area type="monotone" dataKey="downloads" name="Downloads" stroke="#7c3aed" fill="#ede9ff" strokeWidth={2}/>{trendData[0]?.registered!=null&&<Area type="monotone" dataKey="registered" name="Registered" stroke="#06b6d4" fill="#cffafe" strokeWidth={1.5}/>}</AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-                <div className="grid lg:grid-cols-2 gap-4">
-                  <div className="bg-white border border-stone-200 rounded-2xl p-4">
-                    <div className="text-sm font-bold text-stone-900">School Monthly Trend — Downloads</div>
-                    <div className="h-[240px] mt-3">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={trendData}><CartesianGrid strokeDasharray="3 3" stroke="#f5f5f4"/><XAxis dataKey="month" tick={{fontSize:11}}/><YAxis tick={{fontSize:11}} tickFormatter={fmtCompact}/><Tooltip content={<Tip/>}/><Line type="monotone" dataKey="downloads" stroke="#7c3aed" strokeWidth={2.5} dot={{r:3}}/></LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-                  <div className="bg-white border border-stone-200 rounded-2xl p-4">
-                    <div className="text-sm font-bold text-stone-900">Registered Users Monthly Trend</div>
-                    <div className="h-[240px] mt-3">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={trendData}><CartesianGrid strokeDasharray="3 3" stroke="#f5f5f4"/><XAxis dataKey="month" tick={{fontSize:11}}/><YAxis tick={{fontSize:11}}/><Tooltip content={<Tip/>}/><Line type="monotone" dataKey="registered" stroke="#06b6d4" strokeWidth={2.5} dot={{r:3}}/></LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-                </div>
-                <div className="bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden">
-                  <div className="px-5 py-3 border-b border-stone-200"><div className="text-sm font-bold text-stone-900">Monthly Data (historical summary)</div><div className="text-xs text-stone-600">Auto-generated from current file + synthetic history — replace with real monthly archives as you import</div></div>
-                  <div className="overflow-auto">
-                    <table className="w-full text-sm"><thead className="bg-stone-50 border-b"><tr><th className="text-left px-4 py-2">Month</th><th className="text-right px-4 py-2">Schools</th><th className="text-right px-4 py-2">Registered</th><th className="text-right px-4 py-2">Downloads</th></tr></thead><tbody className="divide-y divide-stone-100">{trendData.map(r=>(
-                      <tr key={r.month} className={r.month===reportingMonth.slice(0,3)?"bg-violet-50":"hover:bg-stone-50"}><td className="px-4 py-2 font-medium">{r.month}</td><td className="px-4 py-2 text-right font-mono">{r.schools?fmt(r.schools):"—"}</td><td className="px-4 py-2 text-right font-mono">{r.registered?fmt(r.registered):"—"}</td><td className="px-4 py-2 text-right font-mono font-semibold">{fmt(r.downloads)}</td></tr>
-                    ))}</tbody></table>
-                  </div>
-                </div>
+                <SnapshotHistory sourceFile={sourceFile} module={snapshotModule} reportingPeriod={reportingPeriod} />
               </div>
             )}
 
