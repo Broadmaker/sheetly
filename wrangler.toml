@@ -2,12 +2,14 @@ name = "sheetly"
 compatibility_date = "2026-11-03"
 pages_build_output_dir = "./dist"
 
-# Basic auth credentials (single user). Set as encrypted secrets:
+# Login credentials (single user). Set as encrypted secrets:
 #   wrangler pages secret put BASIC_AUTH_USER
 #   wrangler pages secret put BASIC_AUTH_PASSWORD
-# For local development, put them in .dev.vars (gitignored):
+# Optional: set SESSION_SECRET to sign session cookies (defaults to BASIC_AUTH_PASSWORD).
+# For local development, put these in .dev.vars (gitignored):
 #   BASIC_AUTH_USER=your-username
 #   BASIC_AUTH_PASSWORD=your-password
+#   SESSION_SECRET=your-random-secret
 
 [[d1_databases]]
 binding = "DB"

@@ -17,6 +17,7 @@ import SchoolComparison from "./components/SchoolComparison"
 import MemberComparison from "./components/MemberComparison"
 import DuplicateReview from "./components/DuplicateReview"
 import AdminPanel from "./components/AdminPanel"
+import Login from "./components/Login"
 import {
   AlertIcon,
   CalendarIcon,
@@ -137,7 +138,7 @@ function activityBucket(n:number){
   return "High Activity"
 }
 
-export default function App(){
+function AppShell({ user, onLogout }: { user: string; onLogout: () => void }){
   const [wb,setWb]=useState<WorkbookData|null>(null)
   const [sourceFile,setSourceFile]=useState<File|null>(null)
   const [sheetIdx,setSheetIdx]=useState(0)
@@ -410,6 +411,7 @@ export default function App(){
             ):(
               <span className="hidden sm:inline-flex text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-full px-3 py-1.5">Local-only • No upload</span>
             )}
+            <button onClick={onLogout} title={`Signed in as ${user}`} className="text-sm font-semibold px-3.5 py-2 rounded-full border border-slate-200 bg-white hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-indigo-500">Sign out</button>
           </div>
         </div>
         {wb && (
@@ -1056,4 +1058,53 @@ export default function App(){
       </footer>
     </div>
   )
+}
+
+export default function App(){
+  const [auth,setAuth]=useState<"checking"|"authenticated"|"unauthenticated">("checking")
+  const [user,setUser]=useState<string|null>(null)
+
+  useEffect(()=>{
+    let cancelled=false
+    async function check(){
+      try{
+        const response=await fetch("/api/auth/session",{headers:{accept:"application/json"}})
+        const data=await response.json().catch(()=>({}))
+        if(cancelled) return
+        if(response.ok&&data.authenticated){
+          setUser(typeof data.user==="string"?data.user:"")
+          setAuth("authenticated")
+        }else{
+          setAuth("unauthenticated")
+        }
+      }catch{
+        if(!cancelled) setAuth("unauthenticated")
+      }
+    }
+    void check()
+    return ()=>{cancelled=true}
+  },[])
+
+  async function logout(){
+    try{ await fetch("/api/auth/logout",{method:"POST"}) }catch{}
+    setUser(null)
+    setAuth("unauthenticated")
+  }
+
+  if(auth==="checking"){
+    return (
+      <div className="min-h-screen bg-slate-50 grid place-items-center px-4">
+        <div className="flex items-center gap-3" role="status" aria-live="polite">
+          <div className="size-11 rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-500 grid place-items-center text-white font-black text-base shadow-lg shadow-indigo-600/20 animate-pulse">LR</div>
+          <div className="text-sm font-semibold text-slate-700">Loading Sheetly…</div>
+        </div>
+      </div>
+    )
+  }
+
+  if(auth==="unauthenticated"||!user){
+    return <Login onSuccess={(name)=>{setUser(name); setAuth("authenticated")}} />
+  }
+
+  return <AppShell user={user} onLogout={()=>void logout()} />
 }
