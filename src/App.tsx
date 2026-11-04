@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
 import * as XLSX from "xlsx"
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell,
@@ -14,11 +14,49 @@ import {
 } from "./lib/workbook"
 import SnapshotHistory from "./components/SnapshotHistory"
 import SchoolComparison from "./components/SchoolComparison"
+import MemberComparison from "./components/MemberComparison"
+import DuplicateReview from "./components/DuplicateReview"
 import AdminPanel from "./components/AdminPanel"
+import {
+  AlertIcon,
+  CalendarIcon,
+  CheckIcon,
+  SchoolIcon,
+  SearchIcon,
+  UploadIcon,
+  UsersIcon,
+} from "./components/icons"
 
 // Types
 type View = "dashboard" | "school" | "users" | "comparison" | "trends" | "data" | "admin"
 type ColType = "number" | "percent" | "date" | "string"
+type TrendMetric = "totalDownloads" | "totalRegistered" | "totalActual"
+type TrendPoint = {
+  id: string
+  period: string
+  exportDate: string | null
+  recordCount: number
+  createdAt: string
+  totalRegistered: number
+  totalActual: number
+  totalDownloads: number
+  activeSchools: number
+  participationRate: number
+}
+type SnapshotComparison = {
+  previousPeriod: string
+  currentPeriod: string
+  totalSchools: number
+  previousSchools: number
+  totalDownloads: number
+  previousDownloads: number
+  increased: number
+  decreased: number
+  noChange: number
+  newSchools: number
+  missingSchools: number
+  invalid: number
+}
 
 const COLORS = ["#7c3aed","#f97316","#06b6d4","#10b981","#e11d48","#8b5cf6","#f59e0b","#14b8a6","#6366f1","#ec4899"]
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"]
@@ -26,6 +64,8 @@ const MONTHS = ["January","February","March","April","May","June","July","August
 // ---------- helpers ----------
 function fmt(n: number) { return n.toLocaleString("en-US") }
 function fmtCompact(n: number) { if (n>=1_000_000) return (n/1_000_000).toFixed(2).replace(/\.00$/,"")+"M"; if(n>=1000) return (n/1000).toFixed(1).replace(/\.0$/,"")+"k"; return fmt(Math.round(n)) }
+function fmtPeriod(period:string){ const [year,month]=period.split("-"); const idx=Number(month)-1; return idx>=0&&idx<12? `${MONTHS[idx].slice(0,3)} ${year}`:period }
+function pctChange(current:number, previous:number){ return previous? ((current-previous)/previous)*100 : null }
 function isIdColumn(h:string){ return /\bid\b/i.test(h) }
 function median(arr:number[]){ if(!arr.length) return 0; const s=[...arr].sort((a,b)=>a-b); const m=Math.floor(s.length/2); return s.length%2?s[m]:(s[m-1]+s[m])/2 }
 
@@ -118,12 +158,50 @@ export default function App(){
   const fileRef=useRef<HTMLInputElement>(null)
   const [lastUpdated,setLastUpdated]=useState<string>(()=> new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}))
   const [toast,setToast]=useState<string|null>(null)
+  const [snapshotTrend,setSnapshotTrend]=useState<TrendPoint[]>([])
+  const [snapshotComparison,setSnapshotComparison]=useState<SnapshotComparison|null>(null)
+  const [snapshotStatus,setSnapshotStatus]=useState<"loading"|"ready"|"unavailable">("loading")
+  const [trendMetric,setTrendMetric]=useState<TrendMetric>("totalDownloads")
+  const [comparisonMode,setComparisonMode]=useState<"school"|"member"|"duplicates">("school")
   const isSearchPending = search !== deferredSearch
 
   const active = wb?.sheets[sheetIdx] ?? null
   const datasetType = useMemo(()=> active? detectType(active.headers):"generic", [active])
   const snapshotModule: "school" | "member" | null = datasetType==="school"?"school":datasetType==="user"?"member":null
   const reportingPeriod = useMemo(()=> `${reportingYear}-${String(MONTHS.indexOf(reportingMonth)+1).padStart(2,"0")}`, [reportingMonth,reportingYear])
+
+  const loadSnapshotTrends = useCallback(async()=>{
+    setSnapshotStatus("loading")
+    try{
+      const trendRes=await fetch("/api/snapshots/trends?module=school")
+      if(!trendRes.ok) throw new Error(String(trendRes.status))
+      const trendPayload=await trendRes.json()
+      const trends:TrendPoint[]=Array.isArray(trendPayload.trends)? trendPayload.trends:[]
+      setSnapshotTrend(trends)
+
+      setSnapshotStatus("ready")
+      if(trends.length<2){ setSnapshotComparison(null); return }
+      try{
+        const compareRes=await fetch("/api/comparisons/school",{method:"POST",headers:{"content-type":"application/json"},body:"{}"})
+        if(!compareRes.ok) throw new Error(String(compareRes.status))
+        const compareData=await compareRes.json()
+        const c=compareData?.comparison
+        setSnapshotComparison(c?.summary&&c?.previousSnapshot&&c?.currentSnapshot? {
+          previousPeriod:c.previousSnapshot.reporting_period,
+          currentPeriod:c.currentSnapshot.reporting_period,
+          ...c.summary,
+        }:null)
+      }catch{
+        setSnapshotComparison(null)
+      }
+    }catch{
+      setSnapshotTrend([])
+      setSnapshotComparison(null)
+      setSnapshotStatus("unavailable")
+    }
+  },[])
+
+  useEffect(()=>{ if(view==="dashboard" && wb) void loadSnapshotTrends() },[view,wb,loadSnapshotTrends])
 
   async function loadFile(file:File){
     setLoading(true)
@@ -254,7 +332,7 @@ export default function App(){
       for(const h of metricCols){ const n=toNumber(r[h]); if(n!==null&&n<0) negatives++ }
     }
     const invalidPerc = active.headers.filter(h=> columnTypes[h]==="percent").some(h=> active.rows.some(r=>{ const n=toNumber(r[h]); return n!==null && (n<0||n>100)}))
-    return { total, complete, missingRecords: missing, dups, negatives, invalidPerc, status: (dups===0&&missing<total*0.2&&negatives===0)?"✓ READY":"⚠ REVIEW" }
+    return { total, complete, missingRecords: missing, dups, negatives, invalidPerc, status: (dups===0&&missing<total*0.2&&negatives===0)?"READY":"REVIEW" }
   },[active,columnTypes,metricCols])
 
   const validationItems=useMemo(()=>{
@@ -279,6 +357,17 @@ export default function App(){
   },[datasetType,userKPIs])
 
   const downloadMax = useMemo(()=> schoolKPIs? schoolKPIs.maxDownloads : 0, [schoolKPIs])
+
+  const trendData = useMemo(()=> snapshotTrend.map(t=>({
+    name: fmtPeriod(t.period),
+    totalDownloads: t.totalDownloads,
+    totalRegistered: t.totalRegistered,
+    totalActual: t.totalActual,
+    participationRate: Number(t.participationRate.toFixed(1)),
+  })),[snapshotTrend])
+  const latestTrend = snapshotTrend[snapshotTrend.length-1] ?? null
+  const previousTrend = snapshotTrend[snapshotTrend.length-2] ?? null
+  const trendMetricLabel = trendMetric==="totalDownloads"?"Downloads":trendMetric==="totalRegistered"?"Registered Users":"Active Users"
 
   const handleDrop=(e:React.DragEvent)=>{ e.preventDefault(); setDrag(false); const f=e.dataTransfer.files?.[0]; if(f) loadFile(f) }
 
@@ -328,7 +417,7 @@ export default function App(){
             <div role="tablist" aria-label="Report views" className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-full p-1 shadow-sm">
               {(["dashboard","school","users","comparison","trends","data","admin"] as View[]).map(v=>(
                 <button key={v} role="tab" aria-selected={view===v} aria-controls={`panel-${v}`} id={`tab-${v}`} onClick={()=>setView(v)} className={`px-4 py-2 rounded-full text-sm font-bold capitalize tracking-wide transition focus-visible:ring-2 focus-visible:ring-indigo-500 ${view===v?"bg-slate-900 text-white shadow":"text-slate-600 hover:bg-slate-50"}`}>
-                  {v==="dashboard"?"Dashboard":v==="school"?"School Analysis":v==="users"?"User Analysis":v==="comparison"?"School Comparison":v==="trends"?"Snapshot History":v==="admin"?"Admin":"Detailed Data"}
+                  {v==="dashboard"?"Dashboard":v==="school"?"School Analysis":v==="users"?"User Analysis":v==="comparison"?"Comparison":v==="trends"?"Snapshot History":v==="admin"?"Admin":"Detailed Data"}
                 </button>
               ))}
             </div>
@@ -342,7 +431,7 @@ export default function App(){
               <label htmlFor="global-search" className="text-xs font-semibold text-slate-600 shrink-0">SEARCH</label>
               <div className="relative flex-1 md:flex-none">
                 <input id="global-search" type="search" aria-label="Search schools, users or IDs" value={search} onChange={e=>setSearch(e.target.value)} placeholder="School, user, ID…" className="w-full md:w-[200px] pl-7 pr-2 py-1.5 rounded-full border border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none text-xs"/>
-                <span aria-hidden="true" className="absolute left-2.5 top-1.5 text-slate-600 text-xs">⌕</span>
+                <SearchIcon className="pointer-events-none absolute left-2.5 top-1.5 size-4 text-slate-500" />
               </div>
             </div>
             <div className="ml-auto hidden lg:flex items-center gap-2 text-[11px] text-slate-600">
@@ -391,10 +480,10 @@ export default function App(){
                 onClick={()=>fileRef.current?.click()}
                 className={`relative bg-white rounded-[24px] border-2 shadow-xl shadow-slate-900/5 p-6 sm:p-7 flex flex-col gap-5 cursor-pointer focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 outline-none ${drag?"border-indigo-500 bg-indigo-50/50":"border-slate-200"}`}>
                 <div className="flex items-start justify-between gap-4">
-                  <div aria-hidden="true" className="size-12 rounded-2xl bg-indigo-600 grid place-items-center text-white text-xl shadow-lg shadow-indigo-600/20">📊</div>
+                  <div aria-hidden="true" className="size-12 rounded-2xl bg-indigo-600 grid place-items-center text-white shadow-lg shadow-indigo-600/20"><UploadIcon /></div>
                   <span className="text-[11px] font-semibold tracking-widest uppercase bg-slate-900 text-white px-2.5 py-1 rounded-full">Offline • Private</span>
                 </div>
-                <div><div className="text-lg font-bold text-slate-900">{drag?"Drop to parse ✨":"Drop Excel here"}</div><div id="dropzone-help" className="text-sm text-slate-600 mt-1 leading-relaxed">Supports <b className="text-slate-700">.xls/.xlsx/.csv</b> up to 25 MB. Empty columns auto-removed, ID columns excluded from sums.</div></div>
+                <div><div className="text-lg font-bold text-slate-900">{drag?"Drop to parse":"Drop Excel here"}</div><div id="dropzone-help" className="text-sm text-slate-600 mt-1 leading-relaxed">Supports <b className="text-slate-700">.xls/.xlsx/.csv</b> up to 25 MB. Empty columns auto-removed, ID columns excluded from sums.</div></div>
                 <div className="flex gap-2">
                   <button onClick={e=>{e.stopPropagation(); fileRef.current?.click()}} disabled={loading} aria-busy={loading} className="flex-1 py-3 rounded-xl bg-indigo-600 text-white font-semibold text-sm hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-indigo-500 cursor-pointer">{loading?"Parsing…":"Choose file"}</button>
                   <button onClick={e=>{e.stopPropagation(); document.getElementById("samples")?.scrollIntoView({behavior:"smooth"})}} className="px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm font-medium hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-indigo-500">Samples</button>
@@ -409,11 +498,11 @@ export default function App(){
               <h2 className="text-sm font-bold text-slate-900">Try a sample file</h2>
               <div className="mt-3 grid md:grid-cols-2 gap-4">
                 {[
-                  {title:"LR Portal — Utilization", file:"/samples/sample-utilization.xls", name:"LR Portal Utilization.xls", desc:"498 schools • Zamboanga Sibugay • Downloads, participation", meta:"498 rows • 6 cols", accent:"from-orange-500 to-amber-500", icon:"🏫"},
-                  {title:"LR Portal — Registered Users", file:"/samples/sample-registered.xls", name:"LR Portal Registered Users.xls", desc:"7 users • Gender, Role, Downloads, Registered date", meta:"7 rows • 10 cols", accent:"from-indigo-600 to-blue-500", icon:"👥"},
+                  {title:"LR Portal — Utilization", file:"/samples/sample-utilization.xls", name:"LR Portal Utilization.xls", desc:"498 schools • Zamboanga Sibugay • Downloads, participation", meta:"498 rows • 6 cols", accent:"from-orange-500 to-amber-500", icon:"school"},
+                  {title:"LR Portal — Registered Users", file:"/samples/sample-registered.xls", name:"LR Portal Registered Users.xls", desc:"7 users • Gender, Role, Downloads, Registered date", meta:"7 rows • 10 cols", accent:"from-indigo-600 to-blue-500", icon:"users"},
                 ].map(c=>(
                   <button key={c.file} onClick={()=>loadSample(c.file,c.name)} className="text-left bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-slate-300 flex gap-4">
-                    <div className={`size-12 rounded-2xl bg-gradient-to-br ${c.accent} grid place-items-center text-white`}>{c.icon==="school"?<svg className="size-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 9h.01M9 13h.01M9 17h.01M15 9h.01M15 13h.01M15 17h.01"/></svg>:<svg className="size-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>}</div>
+                    <div className={`size-12 rounded-2xl bg-gradient-to-br ${c.accent} grid place-items-center text-white`}>{c.icon==="school"?<SchoolIcon />:<UsersIcon />}</div>
                     <div className="flex-1 min-w-0"><div className="font-semibold text-slate-900">{c.title}</div><div className="text-xs text-slate-600 mt-1">{c.desc}</div><div className="mt-2 inline-flex text-[11px] font-medium bg-slate-900 text-white px-2.5 py-1 rounded-full">Load → <span className="opacity-60">{c.meta}</span></div></div>
                   </button>
                 ))}
@@ -514,16 +603,53 @@ export default function App(){
                   </div>
                 )}
 
-                {/* Historical trend requires persisted snapshots */}
+                {/* Historical trend from persisted school snapshots */}
                 <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-                  <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-3">
-                    <div><div className="text-sm font-bold text-slate-900">HISTORICAL TREND</div><div className="text-xs text-slate-600">Requires at least two saved reporting snapshots</div></div>
-                    <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-3 py-1.5">Baseline only</span>
+                  <div className="px-5 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-bold text-slate-900">HISTORICAL TREND</div>
+                      <div className="text-xs text-slate-600">{snapshotStatus==="unavailable" ? "Snapshot service unavailable — save snapshots from Admin" : snapshotTrend.length ? `${snapshotTrend.length} saved reporting period${snapshotTrend.length===1?"":"s"} • school snapshots` : "Save school snapshots to unlock the monthly trend"}</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="sr-only" htmlFor="trend-metric">Trend metric</label>
+                      <select id="trend-metric" value={trendMetric} onChange={e=>setTrendMetric(e.target.value as TrendMetric)} className="px-2.5 py-1.5 rounded-full border border-slate-200 bg-slate-50 text-xs font-semibold focus-visible:ring-2 focus-visible:ring-indigo-500">
+                        <option value="totalDownloads">Downloads</option>
+                        <option value="totalRegistered">Registered Users</option>
+                        <option value="totalActual">Active Users</option>
+                      </select>
+                      <button onClick={()=>void loadSnapshotTrends()} disabled={snapshotStatus==="loading"} className="px-3 py-1.5 rounded-full border border-slate-200 bg-white text-xs font-semibold hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">{snapshotStatus==="loading"?"Loading…":"Refresh"}</button>
+                    </div>
                   </div>
-                  <div className="p-8 text-center">
-                    <div className="text-sm font-semibold text-slate-800">No previous snapshot available</div>
-                    <div className="text-xs text-slate-600 mt-1 max-w-md mx-auto">This upload is treated as the current baseline. Historical charts will appear after snapshot storage and a later upload are added.</div>
-                  </div>
+                  {snapshotStatus==="loading" ? (
+                    <div className="h-[260px] grid place-items-center" aria-busy="true" aria-live="polite"><div className="w-3/4 h-32 bg-slate-100 rounded-2xl animate-pulse"/></div>
+                  ) : snapshotTrend.length ? (
+                    <>
+                      <div className="h-[260px] p-3">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={trendData} margin={{left:4,right:8,top:8,bottom:0}}>
+                            <defs><linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#4f46e5" stopOpacity={0.35}/><stop offset="100%" stopColor="#4f46e5" stopOpacity={0.02}/></linearGradient></defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
+                            <XAxis dataKey="name" tick={{fontSize:11}}/>
+                            <YAxis tick={{fontSize:11}} tickFormatter={(v:number)=>fmtCompact(v)} width={56}/>
+                            <Tooltip content={<Tip/>}/>
+                            <Area type="monotone" dataKey={trendMetric} name={trendMetricLabel} stroke="#4f46e5" strokeWidth={2.5} fill="url(#trendFill)" dot={{r:3}}/>
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 px-5 pb-4 text-xs">
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5"><div className="text-slate-600">Latest</div><div className="font-bold text-slate-900 text-base">{latestTrend? fmtPeriod(latestTrend.period):"—"}</div><div className="text-slate-600 mt-0.5">{previousTrend? `vs ${fmtPeriod(previousTrend.period)}`:""}</div></div>
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5"><div className="text-slate-600">Downloads</div><div className="font-bold text-slate-900 text-base">{latestTrend? fmtCompact(latestTrend.totalDownloads):"—"}</div>{(()=>{ const change=latestTrend&&previousTrend? pctChange(latestTrend.totalDownloads,previousTrend.totalDownloads):null; return change===null? null:<div className={`mt-0.5 font-semibold ${change>0?"text-emerald-700":change<0?"text-red-700":"text-slate-600"}`}>{change>0?"+":""}{change.toFixed(1)}% vs prev</div> })()}</div>
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5"><div className="text-slate-600">Registered</div><div className="font-bold text-slate-900 text-base">{latestTrend? fmt(latestTrend.totalRegistered):"—"}</div>{(()=>{ const change=latestTrend&&previousTrend? pctChange(latestTrend.totalRegistered,previousTrend.totalRegistered):null; return change===null? null:<div className={`mt-0.5 font-semibold ${change>0?"text-emerald-700":change<0?"text-red-700":"text-slate-600"}`}>{change>0?"+":""}{change.toFixed(1)}% vs prev</div> })()}</div>
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5"><div className="text-slate-600">Participation</div><div className="font-bold text-slate-900 text-base">{latestTrend? latestTrend.participationRate.toFixed(1)+"%":"—"}</div>{latestTrend&&previousTrend?<div className={`mt-0.5 font-semibold ${latestTrend.participationRate>previousTrend.participationRate?"text-emerald-700":latestTrend.participationRate<previousTrend.participationRate?"text-red-700":"text-slate-600"}`}>{latestTrend.participationRate>previousTrend.participationRate?"+":""}{(latestTrend.participationRate-previousTrend.participationRate).toFixed(1)} pp</div>:null}</div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="p-8 text-center">
+                      <div className="text-sm font-semibold text-slate-800">{snapshotStatus==="unavailable" ? "Snapshot service is not reachable" : "No saved snapshots yet"}</div>
+                      <div className="text-xs text-slate-600 mt-1 max-w-md mx-auto">{snapshotStatus==="unavailable" ? "Run the app with the Cloudflare Pages worker (pnpm preview:worker) to reach the snapshot API." : "This upload is treated as the current baseline. Open Admin, validate a school export, and save it as a snapshot to start the trend."}</div>
+                      <button onClick={()=>setView("admin")} className="mt-3 px-4 py-2 rounded-full bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800">Open Admin</button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid lg:grid-cols-2 gap-4">
@@ -596,16 +722,40 @@ export default function App(){
                   </div>
                 </div>
 
-                {/* Snapshot comparison requires persisted snapshots */}
+                {/* Snapshot comparison from the latest two saved school snapshots */}
                 <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-                  <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
-                    <div><div className="text-sm font-bold text-slate-900">SNAPSHOT COMPARISON</div><div className="text-xs text-slate-600">Current vs. previous reporting period</div></div>
-                    <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-3 py-1">Not available</span>
+                  <div className="px-5 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                    <div><div className="text-sm font-bold text-slate-900">SNAPSHOT COMPARISON</div><div className="text-xs text-slate-600">Latest two saved school snapshots • matched by School ID</div></div>
+                    {snapshotComparison ? (
+                      <button onClick={()=>setView("comparison")} className="px-3 py-1.5 rounded-full bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700">Open full comparison</button>
+                    ) : (
+                      <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-3 py-1">Not available</span>
+                    )}
                   </div>
-                  <div className="p-8 text-center">
-                    <div className="text-sm font-semibold text-slate-800">No comparison can be calculated yet</div>
-                    <div className="text-xs text-slate-600 mt-1 max-w-md mx-auto">The current file is the baseline. Upload a later export and save snapshots to enable increased, decreased, and unchanged comparisons.</div>
-                  </div>
+                  {snapshotComparison ? (
+                    <div className="p-4 space-y-3">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                        <span className="bg-slate-900 text-white rounded-full px-3 py-1 font-semibold">{fmtPeriod(snapshotComparison.previousPeriod)}</span>
+                        <span aria-hidden="true">→</span>
+                        <span className="bg-indigo-600 text-white rounded-full px-3 py-1 font-semibold">{fmtPeriod(snapshotComparison.currentPeriod)}</span>
+                        <span className="text-slate-600">•</span>
+                        <span>Downloads <b className="text-slate-900">{fmt(snapshotComparison.previousDownloads)}</b> → <b className="text-slate-900">{fmt(snapshotComparison.totalDownloads)}</b>{(()=>{ const change=pctChange(snapshotComparison.totalDownloads,snapshotComparison.previousDownloads); return change===null? null:<span className={`ml-1 font-semibold ${change>0?"text-emerald-700":change<0?"text-red-700":"text-slate-600"}`}>{change>0?"+":""}{change.toFixed(1)}%</span> })()}</span>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 text-xs">
+                        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 text-center"><div className="text-emerald-600">Increased</div><div className="text-lg font-extrabold text-emerald-700">{snapshotComparison.increased}</div></div>
+                        <div className="bg-red-50 border border-red-200 rounded-xl p-2.5 text-center"><div className="text-red-600">Decreased</div><div className="text-lg font-extrabold text-red-700">{snapshotComparison.decreased}</div></div>
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-center"><div className="text-slate-600">No change</div><div className="text-lg font-extrabold text-slate-900">{snapshotComparison.noChange}</div></div>
+                        <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-2.5 text-center"><div className="text-indigo-600">New</div><div className="text-lg font-extrabold text-indigo-700">{snapshotComparison.newSchools}</div></div>
+                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-2.5 text-center"><div className="text-amber-600">Missing</div><div className="text-lg font-extrabold text-amber-700">{snapshotComparison.missingSchools}</div></div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center">
+                      <div className="text-sm font-semibold text-slate-800">{snapshotStatus==="unavailable" ? "Snapshot service is not reachable" : "Two saved school snapshots are required"}</div>
+                      <div className="text-xs text-slate-600 mt-1 max-w-md mx-auto">{snapshotStatus==="unavailable" ? "Run the app with the Cloudflare Pages worker (pnpm preview:worker) to load saved comparisons." : "Save another school export as a snapshot in Admin to enable increased, decreased, new, and missing comparisons."}</div>
+                      <button onClick={()=>setView("admin")} className="mt-3 px-4 py-2 rounded-full bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800">Open Admin</button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Filters summary footer per spec 26 */}
@@ -777,7 +927,14 @@ export default function App(){
 
             {view==="comparison" && (
               <div id="panel-comparison" role="tabpanel" aria-labelledby="tab-comparison" tabIndex={0} className="space-y-4 outline-none">
-                <SchoolComparison />
+                <div className="bg-white border border-slate-200 rounded-2xl p-1.5 inline-flex items-center gap-1.5 shadow-sm">
+                  {(["school","member","duplicates"] as const).map(mode=>(
+                    <button key={mode} onClick={()=>setComparisonMode(mode)} aria-pressed={comparisonMode===mode} className={`px-4 py-2 rounded-full text-sm font-bold transition focus-visible:ring-2 focus-visible:ring-indigo-500 ${comparisonMode===mode?"bg-slate-900 text-white shadow":"text-slate-600 hover:bg-slate-50"}`}>
+                      {mode==="school"?"School Comparison":mode==="member"?"Member Comparison":"Duplicate Review"}
+                    </button>
+                  ))}
+                </div>
+                {comparisonMode==="school"?<SchoolComparison />:comparisonMode==="member"?<MemberComparison />:<DuplicateReview />}
               </div>
             )}
 
@@ -820,7 +977,7 @@ export default function App(){
                       <div className="divide-y divide-slate-100">
                         {validationItems.map(v=>(
                           <div key={v.label} className="flex items-center justify-between px-4 py-2 text-xs">
-                            <span className="flex items-center gap-2"><span className={`size-5 rounded-full grid place-items-center text-[11px] font-bold ${v.ok?"bg-emerald-500 text-white":"bg-amber-500 text-white"}`}>{v.ok?"✓":"!"}</span><span className="font-medium text-slate-700">{v.label}</span></span>
+                            <span className="flex items-center gap-2"><span className={`size-5 rounded-full grid place-items-center text-[11px] font-bold ${v.ok?"bg-emerald-500 text-white":"bg-amber-500 text-white"}`}>{v.ok?<CheckIcon className="size-3"/>:<AlertIcon className="size-3"/>}</span><span className="font-medium text-slate-700">{v.label}</span></span>
                             <span className={`font-mono ${v.ok?"text-slate-600":"text-amber-700 font-semibold"}`}>{v.detail}</span>
                           </div>
                         ))}
@@ -831,7 +988,7 @@ export default function App(){
 
                 <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
                   <div className="px-4 py-3 border-b border-slate-200 flex flex-wrap items-center gap-2">
-                    <div className="relative"><label className="sr-only" htmlFor="data-search">Search data</label><input id="data-search" type="search" aria-label="Search school, user or ID" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search school, user, ID…" className="w-[240px] pl-8 pr-3 py-2 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none text-sm"/><span aria-hidden="true" className="absolute left-2.5 top-2.5 text-slate-600 text-xs">⌕</span></div>
+                    <div className="relative"><label className="sr-only" htmlFor="data-search">Search data</label><input id="data-search" type="search" aria-label="Search school, user or ID" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search school, user, ID…" className="w-[240px] pl-8 pr-3 py-2 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none text-sm"/><SearchIcon className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-slate-500"/></div>
                     <span className="text-xs text-slate-600">{fmt(filtered.length)} of {fmt(active?.rows.length??0)} match</span>
                     <details className="ml-auto relative">
                       <summary className="list-none cursor-pointer text-xs font-semibold px-3 py-2 rounded-xl border border-slate-200 bg-white">Columns ▾</summary>
@@ -840,7 +997,7 @@ export default function App(){
                           <label key={h} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded-xl text-sm cursor-pointer">
                             <input type="checkbox" checked={displayedHeaders.includes(h)} onChange={e=> setVisibleCols(prev=>{
                               const cur=prev??active.headers; return e.target.checked? [...cur,h] : cur.filter(x=>x!==h)
-                            })}/><span className="truncate">{h}</span><span className="ml-auto text-[11px] px-1.5 py-0.5 rounded-full border bg-slate-50">{columnTypes[h]==="number"?"#":columnTypes[h]==="percent"?"%":columnTypes[h]==="date"?"📅":"Aa"}</span>
+                            })}/><span className="truncate">{h}</span><span className="ml-auto inline-flex items-center text-[11px] px-1.5 py-0.5 rounded-full border bg-slate-50">{columnTypes[h]==="number"?"#":columnTypes[h]==="percent"?"%":columnTypes[h]==="date"?<CalendarIcon className="size-3"/>:"Aa"}</span>
                           </label>
                         ))}
                         <button onClick={()=>setVisibleCols(active?.headers??null)} className="w-full mt-2 text-xs font-bold bg-slate-900 text-white rounded-full py-1.5">Reset</button>

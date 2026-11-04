@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import * as XLSX from "xlsx"
+import { SearchIcon } from "./icons"
 
 interface Snapshot {
   id: string
@@ -269,7 +270,7 @@ export default function SchoolComparison() {
           <div className="relative">
             <label htmlFor="comparison-search" className="sr-only">Search schools</label>
             <input id="comparison-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search school or ID…" className="w-[240px] pl-8 pr-3 py-2 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none text-sm" />
-            <span aria-hidden="true" className="absolute left-2.5 top-2.5 text-slate-600 text-xs">⌕</span>
+            <SearchIcon className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-slate-500" />
           </div>
           <label htmlFor="comparison-status" className="sr-only">Filter by status</label>
           <select id="comparison-status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as "all" | Category)} className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-medium">

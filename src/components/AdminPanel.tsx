@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { detectModuleFromHeaders, parseWorkbookBuffer } from "../lib/workbook"
+import { AlertIcon, CheckIcon, CircleIcon, UploadIcon } from "./icons"
 
 type Module = "school" | "member"
 type DownloadBasis = "cumulative" | "period" | "unknown"
@@ -352,7 +353,7 @@ export default function AdminPanel({ onOpenComparison, onBack }: Props) {
               className={`rounded-2xl border-2 border-dashed p-4 cursor-pointer outline-none transition focus-visible:ring-2 focus-visible:ring-indigo-500 ${drag ? "border-indigo-500 bg-indigo-50" : "border-slate-200 bg-slate-50 hover:border-slate-300"}`}
             >
               <div className="flex flex-wrap items-center gap-3">
-                <div aria-hidden="true" className="size-11 rounded-2xl bg-indigo-600 text-white grid place-items-center text-lg font-bold">↑</div>
+                <div aria-hidden="true" className="size-11 rounded-2xl bg-indigo-600 text-white grid place-items-center"><UploadIcon className="size-5" /></div>
                 <div className="min-w-0 flex-1">
                   <div className="font-semibold text-slate-900 truncate">{file ? file.name : "Drop Excel here"}</div>
                   <div className="text-xs text-slate-600 truncate">
@@ -457,10 +458,10 @@ export default function AdminPanel({ onOpenComparison, onBack }: Props) {
           <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4">
             <div className="text-sm font-bold text-slate-900">ADMIN CHECKLIST</div>
             <div className="mt-3 space-y-2 text-xs text-slate-600">
-              <div className="flex items-center gap-2"><span className={schoolSnapshots.length >= 2 ? "text-emerald-600" : "text-slate-400"}>{schoolSnapshots.length >= 2 ? "✓" : "○"}</span>Two school snapshots saved</div>
-              <div className="flex items-center gap-2"><span className={latestSnapshot ? "text-emerald-600" : "text-slate-400"}>{latestSnapshot ? "✓" : "○"}</span>At least one snapshot saved</div>
-              <div className="flex items-center gap-2"><span className={health?.status === "ok" ? "text-emerald-600" : "text-amber-600"}>{health?.status === "ok" ? "✓" : "!"}</span>D1 and R2 available</div>
-              <div className="flex items-center gap-2"><span className={comparison ? "text-emerald-600" : "text-slate-400"}>{comparison ? "✓" : "○"}</span>Comparison generated</div>
+              <div className="flex items-center gap-2"><span className={schoolSnapshots.length >= 2 ? "text-emerald-600" : "text-slate-400"}>{schoolSnapshots.length >= 2 ? <CheckIcon className="size-4" /> : <CircleIcon className="size-4" />}</span>Two school snapshots saved</div>
+              <div className="flex items-center gap-2"><span className={latestSnapshot ? "text-emerald-600" : "text-slate-400"}>{latestSnapshot ? <CheckIcon className="size-4" /> : <CircleIcon className="size-4" />}</span>At least one snapshot saved</div>
+              <div className="flex items-center gap-2"><span className={health?.status === "ok" ? "text-emerald-600" : "text-amber-600"}>{health?.status === "ok" ? <CheckIcon className="size-4" /> : <AlertIcon className="size-4" />}</span>D1 and R2 available</div>
+              <div className="flex items-center gap-2"><span className={comparison ? "text-emerald-600" : "text-slate-400"}>{comparison ? <CheckIcon className="size-4" /> : <CircleIcon className="size-4" />}</span>Comparison generated</div>
             </div>
           </div>
         </div>
