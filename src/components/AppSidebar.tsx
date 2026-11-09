@@ -5,9 +5,11 @@ import {
   DataIcon,
   DuplicateIcon,
   GridIcon,
+  HistoryIcon,
   LogoutIcon,
   MailIcon,
   SchoolIcon,
+  ShieldIcon,
   SearchIcon,
   TrendIcon,
   UploadIcon,
@@ -43,6 +45,10 @@ function iconFor(view: AppView) {
       return <SearchIcon className="size-[18px]" />
     case "email":
       return <MailIcon className="size-[18px]" />
+    case "history":
+      return <HistoryIcon className="size-[18px]" />
+    case "audit":
+      return <ShieldIcon className="size-[18px]" />
     default:
       return <DataIcon className="size-[18px]" />
   }

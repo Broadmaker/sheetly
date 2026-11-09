@@ -166,3 +166,22 @@ export function MailIcon({ className = "size-5" }: IconProps) {
     </svg>
   )
 }
+
+export function HistoryIcon({ className = "size-5" }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="M3 12a9 9 0 1 0 3-6.7" />
+      <path d="M3 4v5h5" />
+      <path d="M12 7v5l3 2" />
+    </svg>
+  )
+}
+
+export function ShieldIcon({ className = "size-5" }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="M12 3 5 6v6c0 4 3 7 7 9 4-2 7-5 7-9V6l-7-3Z" />
+      <path d="m9 12 2 2 4-4" />
+    </svg>
+  )
+}

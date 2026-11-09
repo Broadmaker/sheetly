@@ -18,6 +18,8 @@ import MemberComparison from "./components/MemberComparison"
 import DuplicateReview from "./components/DuplicateReview"
 import FindMember from "./components/FindMember"
 import EmailValidation from "./components/EmailValidation"
+import UploadHistory from "./components/UploadHistory"
+import AuditLog from "./components/AuditLog"
 import AdminPanel from "./components/AdminPanel"
 import Login from "./components/Login"
 import AppSidebar, { Brand, MobileNav } from "./components/AppSidebar"
@@ -82,6 +84,8 @@ const VIEW_TITLES: Record<AppView,string> = {
   duplicates:"Duplicate Review",
   find:"Find a Member",
   email:"Email Validation",
+  history:"Upload History",
+  audit:"Audit Logs",
   data:"Detailed Data",
 }
 
@@ -539,6 +543,16 @@ function AppShell({ user, onLogout }: { user: string; onLogout: () => void }){
         {view==="email" && (
           <div id="panel-email" role="region" aria-label="Email validation" tabIndex={0} className="outline-none">
             <EmailValidation />
+          </div>
+        )}
+        {view==="history" && (
+          <div id="panel-history" role="region" aria-label="Upload history" tabIndex={0} className="outline-none">
+            <UploadHistory />
+          </div>
+        )}
+        {view==="audit" && (
+          <div id="panel-audit" role="region" aria-label="Audit log" tabIndex={0} className="outline-none">
+            <AuditLog />
           </div>
         )}
         {view==="trends" && (
