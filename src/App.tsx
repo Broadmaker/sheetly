@@ -16,6 +16,7 @@ import SnapshotHistory from "./components/SnapshotHistory"
 import SchoolComparison from "./components/SchoolComparison"
 import MemberComparison from "./components/MemberComparison"
 import DuplicateReview from "./components/DuplicateReview"
+import FindMember from "./components/FindMember"
 import AdminPanel from "./components/AdminPanel"
 import Login from "./components/Login"
 import AppSidebar, { Brand, MobileNav } from "./components/AppSidebar"
@@ -78,6 +79,7 @@ const VIEW_TITLES: Record<AppView,string> = {
   users:"User Analysis",
   comparison:"Comparison",
   duplicates:"Duplicate Review",
+  find:"Find a Member",
   data:"Detailed Data",
 }
 
@@ -525,6 +527,11 @@ function AppShell({ user, onLogout }: { user: string; onLogout: () => void }){
         {view==="duplicates" && (
           <div id="panel-duplicates" role="region" aria-label="Duplicate review" tabIndex={0} className="outline-none">
             <DuplicateReview />
+          </div>
+        )}
+        {view==="find" && (
+          <div id="panel-find" role="region" aria-label="Find a member" tabIndex={0} className="outline-none">
+            <FindMember />
           </div>
         )}
         {view==="trends" && (

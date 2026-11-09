@@ -7,6 +7,7 @@ import {
   GridIcon,
   LogoutIcon,
   SchoolIcon,
+  SearchIcon,
   TrendIcon,
   UploadIcon,
   UsersIcon,
@@ -37,6 +38,8 @@ function iconFor(view: AppView) {
       return <CompareIcon className="size-[18px]" />
     case "duplicates":
       return <DuplicateIcon className="size-[18px]" />
+    case "find":
+      return <SearchIcon className="size-[18px]" />
     default:
       return <DataIcon className="size-[18px]" />
   }
