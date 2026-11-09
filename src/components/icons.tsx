@@ -87,3 +87,73 @@ export function SearchIcon({ className = "size-4" }: IconProps) {
     </svg>
   )
 }
+
+export function GridIcon({ className = "size-5" }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      <rect x="14" y="14" width="7" height="7" rx="1.5" />
+    </svg>
+  )
+}
+
+export function ChartIcon({ className = "size-5" }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="M4 20V10" />
+      <path d="M10 20V4" />
+      <path d="M16 20v-7" />
+      <path d="M22 20H2" />
+    </svg>
+  )
+}
+
+export function TrendIcon({ className = "size-5" }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="m3 17 6-6 4 4 8-8" />
+      <path d="M15 7h6v6" />
+    </svg>
+  )
+}
+
+export function CompareIcon({ className = "size-5" }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="M8 3 4 7l4 4" />
+      <path d="M4 7h16" />
+      <path d="m16 21 4-4-4-4" />
+      <path d="M20 17H4" />
+    </svg>
+  )
+}
+
+export function DuplicateIcon({ className = "size-5" }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <rect x="8" y="8" width="12" height="12" rx="2" />
+      <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+    </svg>
+  )
+}
+
+export function DataIcon({ className = "size-5" }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M3 10h18M9 4v16" />
+    </svg>
+  )
+}
+
+export function LogoutIcon({ className = "size-5" }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <path d="m16 17 5-5-5-5" />
+      <path d="M21 12H9" />
+    </svg>
+  )
+}

@@ -18,18 +18,17 @@ import MemberComparison from "./components/MemberComparison"
 import DuplicateReview from "./components/DuplicateReview"
 import AdminPanel from "./components/AdminPanel"
 import Login from "./components/Login"
+import AppSidebar, { Brand, MobileNav } from "./components/AppSidebar"
+import AdminOverview from "./components/AdminOverview"
+import { REPORT_VIEWS, type AppView } from "./lib/navigation"
 import {
   AlertIcon,
   CalendarIcon,
   CheckIcon,
-  SchoolIcon,
   SearchIcon,
-  UploadIcon,
-  UsersIcon,
 } from "./components/icons"
 
 // Types
-type View = "dashboard" | "school" | "users" | "comparison" | "trends" | "data" | "admin"
 type ColType = "number" | "percent" | "date" | "string"
 type TrendMetric = "totalDownloads" | "totalRegistered" | "totalActual"
 type TrendPoint = {
@@ -58,9 +57,29 @@ type SnapshotComparison = {
   missingSchools: number
   invalid: number
 }
+type SavedSnapshot = {
+  id: string
+  module: "school" | "member"
+  reporting_period: string
+  record_count: number
+  original_filename: string
+  created_at: string
+  uploaded_at: string
+}
 
 const COLORS = ["#7c3aed","#f97316","#06b6d4","#10b981","#e11d48","#8b5cf6","#f59e0b","#14b8a6","#6366f1","#ec4899"]
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"]
+const VIEW_TITLES: Record<AppView,string> = {
+  overview:"Overview",
+  uploads:"Uploads & Snapshots",
+  trends:"Snapshot Trends",
+  dashboard:"Report Dashboard",
+  school:"School Analysis",
+  users:"User Analysis",
+  comparison:"Comparison",
+  duplicates:"Duplicate Review",
+  data:"Detailed Data",
+}
 
 // ---------- helpers ----------
 function fmt(n: number) { return n.toLocaleString("en-US") }
@@ -142,9 +161,8 @@ function AppShell({ user, onLogout }: { user: string; onLogout: () => void }){
   const [wb,setWb]=useState<WorkbookData|null>(null)
   const [sourceFile,setSourceFile]=useState<File|null>(null)
   const [sheetIdx,setSheetIdx]=useState(0)
-  const [view,setView]=useState<View>("dashboard")
+  const [view,setView]=useState<AppView>("overview")
   const [loading,setLoading]=useState(false)
-  const [drag,setDrag]=useState(false)
   const [search,setSearch]=useState("")
   const deferredSearch=useDeferredValue(search)
   const [sortKey,setSortKey]=useState("")
@@ -163,7 +181,9 @@ function AppShell({ user, onLogout }: { user: string; onLogout: () => void }){
   const [snapshotComparison,setSnapshotComparison]=useState<SnapshotComparison|null>(null)
   const [snapshotStatus,setSnapshotStatus]=useState<"loading"|"ready"|"unavailable">("loading")
   const [trendMetric,setTrendMetric]=useState<TrendMetric>("totalDownloads")
-  const [comparisonMode,setComparisonMode]=useState<"school"|"member"|"duplicates">("school")
+  const [comparisonMode,setComparisonMode]=useState<"school"|"member">("school")
+  const [savedSnapshots,setSavedSnapshots]=useState<SavedSnapshot[]>([])
+  const [savedStatus,setSavedStatus]=useState<"idle"|"loading"|"ready"|"unavailable">("idle")
   const isSearchPending = search !== deferredSearch
 
   const active = wb?.sheets[sheetIdx] ?? null
@@ -203,6 +223,53 @@ function AppShell({ user, onLogout }: { user: string; onLogout: () => void }){
   },[])
 
   useEffect(()=>{ if(view==="dashboard" && wb) void loadSnapshotTrends() },[view,wb,loadSnapshotTrends])
+
+  const loadSavedSnapshots = useCallback(async()=>{
+    setSavedStatus("loading")
+    try{
+      const response=await fetch("/api/snapshots?limit=200")
+      if(!response.ok) throw new Error(String(response.status))
+      const data=await response.json()
+      setSavedSnapshots(Array.isArray(data.snapshots)? data.snapshots:[])
+      setSavedStatus("ready")
+    }catch{
+      setSavedSnapshots([])
+      setSavedStatus("unavailable")
+    }
+  },[])
+
+  useEffect(()=>{ if(REPORT_VIEWS.includes(view) && !wb) void loadSavedSnapshots() },[view,wb,loadSavedSnapshots])
+
+  const openSnapshot = useCallback(async(id:string)=>{
+    setLoading(true)
+    try{
+      const response=await fetch(`/api/snapshots/${encodeURIComponent(id)}`)
+      const data=await response.json().catch(()=>({}))
+      if(!response.ok) throw new Error(data.error ?? `Unable to load snapshot (${response.status})`)
+      const rows:Record<string,any>[]=Array.isArray(data.rows)? data.rows:[]
+      const headers:string[]=Array.isArray(data.headers)&&data.headers.length? data.headers:Object.keys(rows[0]??{})
+      if(!headers.length) throw new Error("This snapshot has no stored records")
+      const period=String(data.snapshot?.reporting_period ?? "")
+      const [year,month]=period.split("-")
+      const monthIndex=Number(month)-1
+      if(year) setReportingYear(year)
+      if(monthIndex>=0&&monthIndex<12) setReportingMonth(MONTHS[monthIndex])
+      const isMember=data.snapshot?.module==="member"
+      setWb({
+        fileName: data.snapshot?.original_filename || `Saved snapshot ${period}`,
+        sheets: [{ name:isMember?"Member Snapshot":"School Snapshot", headers, rows, raw:[] }],
+      })
+      setSourceFile(null); setSheetIdx(0); setVisibleCols(null); setSearch(""); setSortKey(""); setPage(1); setSchoolFilter("All Schools")
+      const uploadedAt=data.snapshot?.uploaded_at? new Date(data.snapshot.uploaded_at):new Date()
+      setLastUpdated(isNaN(uploadedAt.getTime())? new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}) : uploadedAt.toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}))
+      setView(isMember?"users":"dashboard")
+      setToast(`Opened ${period || "saved"} snapshot • ${fmt(rows.length)} rows`)
+    }catch(cause){
+      setToast(cause instanceof Error? cause.message:"Unable to open the saved snapshot")
+    }finally{
+      setLoading(false)
+    }
+  },[])
 
   async function loadFile(file:File){
     setLoading(true)
@@ -370,160 +437,147 @@ function AppShell({ user, onLogout }: { user: string; onLogout: () => void }){
   const previousTrend = snapshotTrend[snapshotTrend.length-2] ?? null
   const trendMetricLabel = trendMetric==="totalDownloads"?"Downloads":trendMetric==="totalRegistered"?"Registered Users":"Active Users"
 
-  const handleDrop=(e:React.DragEvent)=>{ e.preventDefault(); setDrag(false); const f=e.dataTransfer.files?.[0]; if(f) loadFile(f) }
-
   const schoolOptions=useMemo(()=>{
     if(datasetType!=="school"||!active) return ["All Schools"]
     const names=[...new Set(active.rows.map(r=>cleanValue(r["SCHOOL NAME"])).filter(Boolean))].sort()
     return ["All Schools", ...names.slice(0,300)]
   },[active,datasetType])
 
+  const inReport = REPORT_VIEWS.includes(view)
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-700 selection:bg-indigo-200">
       <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:bg-slate-900 focus:text-white focus:rounded-full focus:text-sm focus:font-semibold">Skip to main content</a>
-      <header className="sticky top-0 z-30 backdrop-blur-xl bg-slate-50/95 border-b border-slate-200/70">
-        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 h-[62px] flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="size-9 rounded-xl bg-gradient-to-br from-indigo-600 to-blue-500 grid place-items-center text-white font-black text-sm shadow-lg shadow-indigo-600/20">LR</div>
-            <div className="leading-none">
-              <div className="font-bold tracking-tight text-slate-900 text-[16px] sm:text-[17px]">LEARNING RESOURCE PORTAL</div>
-              <div className="text-[11px] font-semibold tracking-[0.16em] uppercase text-slate-600">Monthly Visual Report</div>
+      <input ref={fileRef} type="file" accept=".xls,.xlsx,.csv" hidden aria-hidden="true" tabIndex={-1} onChange={e=>{const f=e.target.files?.[0]; if(f) void loadFile(f)}}/>
+      <div className="lg:flex">
+        <AppSidebar view={view} onNavigate={setView} user={user} onLogout={onLogout}/>
+        <div className="flex-1 min-w-0">
+          <header className="sticky top-0 z-30 backdrop-blur-xl bg-slate-50/95 border-b border-slate-200/70">
+            <div className="max-w-[1440px] mx-auto px-4 sm:px-6 h-[68px] flex items-center justify-between gap-4">
+              <div className="lg:hidden"><Brand/></div>
+              <div className="hidden lg:flex items-center gap-3 min-w-0">
+                <div className="text-sm font-bold text-slate-900">{VIEW_TITLES[view]}</div>
+                {wb && <span className="hidden xl:inline-flex items-center gap-2 text-xs bg-white border border-slate-200 rounded-full px-3 py-1.5 shadow-sm"><span className="size-2 rounded-full bg-emerald-500 animate-pulse"/><span className="font-medium truncate max-w-[220px]">{wb.fileName}</span><span className="text-slate-600">•</span><span>{fmt(filtered.length)} rows</span><span className="text-slate-600">•</span><span className="capitalize">{datasetType}</span></span>}
+              </div>
+              <div className="flex items-center gap-2">
+                {wb&&inReport&&(
+                  <>
+                    <div className="hidden xl:flex items-center gap-2 text-xs">
+                      <label className="sr-only" htmlFor="reporting-month-header">Reporting month</label>
+                      <select id="reporting-month-header" aria-label="Reporting month" value={reportingMonth} onChange={e=>setReportingMonth(e.target.value)} className="px-2.5 py-2 rounded-full border border-slate-200 bg-white font-medium focus-visible:ring-2 focus-visible:ring-indigo-500">
+                        {MONTHS.map(m=><option key={m} value={m}>{m}</option>)}
+                      </select>
+                      <label className="sr-only" htmlFor="reporting-year-header">Reporting year</label>
+                      <select id="reporting-year-header" aria-label="Reporting year" value={reportingYear} onChange={e=>setReportingYear(e.target.value)} className="px-2.5 py-2 rounded-full border border-slate-200 bg-white font-medium focus-visible:ring-2 focus-visible:ring-indigo-500">
+                        <option>2024</option><option>2025</option><option>2026</option>
+                      </select>
+                    </div>
+                    <button onClick={()=>{setWb(null); setSourceFile(null)}} title="Load another file or open a saved snapshot" className="hidden sm:inline-flex text-sm font-medium px-3.5 py-2 rounded-full border border-slate-200 bg-white hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-indigo-500">Change source</button>
+                    <button onClick={()=>window.print()} className="hidden sm:inline-flex text-sm font-semibold px-4 py-2 rounded-full bg-slate-900 text-white hover:bg-slate-800 shadow focus-visible:ring-2 focus-visible:ring-indigo-500">Print / PDF</button>
+                  </>
+                )}
+                {inReport&&<button onClick={()=>fileRef.current?.click()} className="text-sm font-semibold px-3.5 py-2 rounded-full border border-slate-200 bg-white hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-indigo-500">Load Excel</button>}
+                <button onClick={onLogout} title={`Signed in as ${user}`} className="lg:hidden text-sm font-semibold px-3.5 py-2 rounded-full border border-slate-200 bg-white hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-indigo-500">Sign out</button>
+              </div>
             </div>
-            {wb && <span className="hidden xl:inline-flex ml-4 items-center gap-2 text-xs bg-white border border-slate-200 rounded-full px-3 py-1.5 shadow-sm"><span className="size-2 rounded-full bg-emerald-500 animate-pulse"/><span className="font-medium truncate max-w-[220px]">{wb.fileName}</span><span className="text-slate-600">•</span><span>{fmt(filtered.length)} rows</span><span className="text-slate-600">•</span><span className="capitalize">{datasetType}</span></span>}
-          </div>
-          <div className="flex items-center gap-2">
-            <button onClick={()=>setView("admin")} className={`text-sm font-semibold px-3.5 py-2 rounded-full border transition focus-visible:ring-2 focus-visible:ring-indigo-500 ${view==="admin"?"bg-slate-900 text-white border-slate-900":"border-slate-200 bg-white hover:bg-slate-50"}`}>Admin</button>
-            {wb?(
-              <>
-                <div className="hidden lg:flex items-center gap-2 text-xs">
-                  <label className="sr-only" htmlFor="reporting-month-header">Reporting month</label>
-                  <select id="reporting-month-header" aria-label="Reporting month" value={reportingMonth} onChange={e=>setReportingMonth(e.target.value)} className="px-2.5 py-2 rounded-full border border-slate-200 bg-white font-medium focus-visible:ring-2 focus-visible:ring-indigo-500">
-                    {MONTHS.map(m=><option key={m} value={m}>{m}</option>)}
-                  </select>
-                  <label className="sr-only" htmlFor="reporting-year-header">Reporting year</label>
-                  <select id="reporting-year-header" aria-label="Reporting year" value={reportingYear} onChange={e=>setReportingYear(e.target.value)} className="px-2.5 py-2 rounded-full border border-slate-200 bg-white font-medium focus-visible:ring-2 focus-visible:ring-indigo-500">
-                    <option>2024</option><option>2025</option><option>2026</option>
+            {wb && inReport && (
+              <nav aria-label="Report filters" className="max-w-[1440px] mx-auto px-4 sm:px-6 flex flex-wrap items-center gap-2 py-2.5 border-t border-slate-100">
+                <div className="flex items-center gap-2 w-full md:w-auto">
+                  <label htmlFor="school-filter" className="text-xs font-semibold text-slate-600 shrink-0">SCHOOL</label>
+                  <select id="school-filter" aria-label="Filter by school" value={schoolFilter} onChange={e=>setSchoolFilter(e.target.value)} className="flex-1 md:flex-none px-3 py-1.5 rounded-full border border-slate-200 bg-white text-xs font-medium max-w-[220px] focus-visible:ring-2 focus-visible:ring-indigo-500">
+                    {schoolOptions.map(o=><option key={o} value={o}>{o}</option>)}
                   </select>
                 </div>
-                <button onClick={()=>{setWb(null); setSourceFile(null)}} className="hidden sm:inline-flex text-sm font-medium px-3.5 py-2 rounded-full border border-slate-200 bg-white hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-indigo-500">New file</button>
-                <button onClick={()=>window.print()} className="inline-flex text-sm font-semibold px-4 py-2 rounded-full bg-slate-900 text-white hover:bg-slate-800 shadow focus-visible:ring-2 focus-visible:ring-indigo-500">Print / PDF</button>
-              </>
-            ):(
-              <span className="hidden sm:inline-flex text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-full px-3 py-1.5">Local-only • No upload</span>
+                <div className="flex items-center gap-2 w-full md:w-auto">
+                  <label htmlFor="global-search" className="text-xs font-semibold text-slate-600 shrink-0">SEARCH</label>
+                  <div className="relative flex-1 md:flex-none">
+                    <input id="global-search" type="search" aria-label="Search schools, users or IDs" value={search} onChange={e=>setSearch(e.target.value)} placeholder="School, user, ID…" className="w-full md:w-[200px] pl-7 pr-2 py-1.5 rounded-full border border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none text-xs"/>
+                    <SearchIcon className="pointer-events-none absolute left-2.5 top-1.5 size-4 text-slate-500" />
+                  </div>
+                </div>
+                <div className="ml-auto hidden lg:flex items-center gap-2 text-[11px] text-slate-600">
+                  <span aria-hidden="true" className="size-1.5 rounded-full bg-emerald-500"/>{active?.headers.length} cols • {metricCols.length} metrics • {lastUpdated}
+                </div>
+              </nav>
             )}
-            <button onClick={onLogout} title={`Signed in as ${user}`} className="text-sm font-semibold px-3.5 py-2 rounded-full border border-slate-200 bg-white hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-indigo-500">Sign out</button>
+          </header>
+          <MobileNav view={view} onNavigate={setView}/>
+
+      <main id="main-content" className="max-w-[1440px] mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        {view==="overview" && <AdminOverview user={user} onNavigate={setView} onOpenSnapshot={(id)=>void openSnapshot(id)}/>}
+        {view==="uploads" && (
+          <div id="panel-uploads" role="region" aria-label="Uploads and snapshots" tabIndex={0} className="outline-none">
+            <AdminPanel onOpenComparison={()=>setView("comparison")} onBack={()=>setView("overview")} />
           </div>
-        </div>
-        {wb && (
-          <nav aria-label="Report sections" className="max-w-[1440px] mx-auto px-4 sm:px-6 flex flex-wrap items-center gap-2 py-2.5 border-t border-slate-100">
-            <div role="tablist" aria-label="Report views" className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-full p-1 shadow-sm">
-              {(["dashboard","school","users","comparison","trends","data","admin"] as View[]).map(v=>(
-                <button key={v} role="tab" aria-selected={view===v} aria-controls={`panel-${v}`} id={`tab-${v}`} onClick={()=>setView(v)} className={`px-4 py-2 rounded-full text-sm font-bold capitalize tracking-wide transition focus-visible:ring-2 focus-visible:ring-indigo-500 ${view===v?"bg-slate-900 text-white shadow":"text-slate-600 hover:bg-slate-50"}`}>
-                  {v==="dashboard"?"Dashboard":v==="school"?"School Analysis":v==="users"?"User Analysis":v==="comparison"?"Comparison":v==="trends"?"Snapshot History":v==="admin"?"Admin":"Detailed Data"}
+        )}
+        {view==="comparison" && (
+          <div id="panel-comparison" role="region" aria-label="Comparison" tabIndex={0} className="space-y-4 outline-none">
+            <div className="bg-white border border-slate-200 rounded-2xl p-1.5 inline-flex items-center gap-1.5 shadow-sm">
+              {(["school","member"] as const).map(mode=>(
+                <button key={mode} onClick={()=>setComparisonMode(mode)} aria-pressed={comparisonMode===mode} className={`px-4 py-2 rounded-full text-sm font-bold transition focus-visible:ring-2 focus-visible:ring-indigo-500 ${comparisonMode===mode?"bg-slate-900 text-white shadow":"text-slate-600 hover:bg-slate-50"}`}>
+                  {mode==="school"?"School Comparison":"Member Comparison"}
                 </button>
               ))}
             </div>
-            <div className="flex items-center gap-2 ml-2 w-full md:w-auto mt-2 md:mt-0">
-              <label htmlFor="school-filter" className="text-xs font-semibold text-slate-600 shrink-0">SCHOOL</label>
-              <select id="school-filter" aria-label="Filter by school" value={schoolFilter} onChange={e=>setSchoolFilter(e.target.value)} className="flex-1 md:flex-none px-3 py-1.5 rounded-full border border-slate-200 bg-white text-xs font-medium max-w-[220px] focus-visible:ring-2 focus-visible:ring-indigo-500">
-                {schoolOptions.map(o=><option key={o} value={o}>{o}</option>)}
-              </select>
-            </div>
-            <div className="flex items-center gap-2 w-full md:w-auto">
-              <label htmlFor="global-search" className="text-xs font-semibold text-slate-600 shrink-0">SEARCH</label>
-              <div className="relative flex-1 md:flex-none">
-                <input id="global-search" type="search" aria-label="Search schools, users or IDs" value={search} onChange={e=>setSearch(e.target.value)} placeholder="School, user, ID…" className="w-full md:w-[200px] pl-7 pr-2 py-1.5 rounded-full border border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none text-xs"/>
-                <SearchIcon className="pointer-events-none absolute left-2.5 top-1.5 size-4 text-slate-500" />
-              </div>
-            </div>
-            <div className="ml-auto hidden lg:flex items-center gap-2 text-[11px] text-slate-600">
-              <span aria-hidden="true" className="size-1.5 rounded-full bg-emerald-500"/>{active?.headers.length} cols • {metricCols.length} metrics • {lastUpdated}
-            </div>
-          </nav>
+            {comparisonMode==="school"?<SchoolComparison />:<MemberComparison />}
+          </div>
         )}
-      </header>
-
-      <main id="main-content" className="max-w-[1440px] mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        {view==="admin" ? (
-          <div id="panel-admin" role="tabpanel" aria-labelledby="tab-admin" tabIndex={0} className="outline-none">
-            <AdminPanel onOpenComparison={()=>setView("comparison")} onBack={()=>setView("dashboard")} />
+        {view==="duplicates" && (
+          <div id="panel-duplicates" role="region" aria-label="Duplicate review" tabIndex={0} className="outline-none">
+            <DuplicateReview />
           </div>
-        ) : !wb?(
-          <div className="space-y-8">
-            <div className="grid lg:grid-cols-[1.05fr_0.95fr] gap-6 sm:gap-8 items-start">
-              <div className="pt-2 sm:pt-4">
-                <div className="inline-flex items-center gap-2 text-xs font-semibold tracking-widest uppercase bg-white border border-slate-200 rounded-full px-3 py-1.5 shadow-sm"><span className="size-2 rounded-full bg-indigo-600"/> Monthly Visual Report System • Sept 2026</div>
-                <h1 className="mt-4 text-[30px] sm:text-[40px] font-extrabold tracking-tight leading-[0.95] text-slate-900">Monthly <span className="bg-gradient-to-br from-indigo-600 to-blue-500 bg-clip-text text-transparent">Visual Monitoring</span> for LR Portal</h1>
-                <p className="mt-4 text-[14.5px] leading-6 text-slate-600 max-w-[620px]">Drop your <b className="text-slate-900">Utilization</b> or <b className="text-slate-900">Registered Users</b> Excel — get the spec Dashboard with 5 KPIs, rankings, activity distribution, validation & quality checks. All local.</p>
-                <div className="mt-6 flex flex-wrap gap-2">
-                  <a href="#samples" className="inline-flex items-center gap-2 text-sm font-semibold bg-slate-900 text-white px-4 py-2.5 rounded-full hover:bg-slate-800">Try a sample ↓</a>
-                  <span className="inline-flex items-center gap-2 text-xs text-slate-600 bg-white border border-slate-200 rounded-full px-3 py-2">XLSX via SheetJS • Recharts</span>
-                </div>
-                <div className="mt-8 grid grid-cols-3 gap-3 max-w-[560px]">
-                  {[{k:"Dashboard",v:"KPI cards",s:"current snapshot"},{k:"School",v:"Top 10",s:"filterable ranking"},{k:"Quality",v:"Validation",s:"9 checks"}].map(x=>(
-                    <div key={x.k} className="bg-white border border-slate-200 rounded-2xl p-3 shadow-sm">
-                      <div className="text-[11px] tracking-widest uppercase font-bold text-slate-600">{x.k}</div>
-                      <div className="text-[15px] font-bold text-slate-900 mt-1">{x.v}</div>
-                      <div className="text-xs text-slate-600">{x.s}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div
-                role="button"
-                tabIndex={0}
-                aria-label="Drop Excel file here or press Enter to browse"
-                aria-describedby="dropzone-help"
-                onDragOver={e=>{e.preventDefault(); setDrag(true)}}
-                onDragEnter={e=>{e.preventDefault(); setDrag(true)}}
-                onDragLeave={()=>setDrag(false)}
-                onDrop={handleDrop}
-                onKeyDown={e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); fileRef.current?.click() } }}
-                onClick={()=>fileRef.current?.click()}
-                className={`relative bg-white rounded-[24px] border-2 shadow-xl shadow-slate-900/5 p-6 sm:p-7 flex flex-col gap-5 cursor-pointer focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 outline-none ${drag?"border-indigo-500 bg-indigo-50/50":"border-slate-200"}`}>
-                <div className="flex items-start justify-between gap-4">
-                  <div aria-hidden="true" className="size-12 rounded-2xl bg-indigo-600 grid place-items-center text-white shadow-lg shadow-indigo-600/20"><UploadIcon /></div>
-                  <span className="text-[11px] font-semibold tracking-widest uppercase bg-slate-900 text-white px-2.5 py-1 rounded-full">Offline • Private</span>
-                </div>
-                <div><div className="text-lg font-bold text-slate-900">{drag?"Drop to parse":"Drop Excel here"}</div><div id="dropzone-help" className="text-sm text-slate-600 mt-1 leading-relaxed">Supports <b className="text-slate-700">.xls/.xlsx/.csv</b> up to 25 MB. Empty columns auto-removed, ID columns excluded from sums.</div></div>
-                <div className="flex gap-2">
-                  <button onClick={e=>{e.stopPropagation(); fileRef.current?.click()}} disabled={loading} aria-busy={loading} className="flex-1 py-3 rounded-xl bg-indigo-600 text-white font-semibold text-sm hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-indigo-500 cursor-pointer">{loading?"Parsing…":"Choose file"}</button>
-                  <button onClick={e=>{e.stopPropagation(); document.getElementById("samples")?.scrollIntoView({behavior:"smooth"})}} className="px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm font-medium hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-indigo-500">Samples</button>
-                </div>
-                <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 text-xs leading-5 text-slate-600">Tip: <b className="text-slate-900">Month</b> + <b className="text-slate-900">School</b> filters affect every KPI & chart.</div>
-                <input ref={fileRef} type="file" accept=".xls,.xlsx,.csv" tabIndex={-1} aria-hidden="true" hidden onChange={e=>{const f=e.target.files?.[0]; if(f) loadFile(f)}}/>
-                {drag&&<div aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-[24px] border-2 border-dashed border-indigo-500 bg-indigo-500/5"/>}
-                <span aria-live="polite" className="sr-only">{drag ? "Release to upload file" : ""}{loading ? "Parsing file" : ""}</span>
-              </div>
-            </div>
-            <div id="samples" className="scroll-mt-20">
-              <h2 className="text-sm font-bold text-slate-900">Try a sample file</h2>
-              <div className="mt-3 grid md:grid-cols-2 gap-4">
-                {[
-                  {title:"LR Portal — Utilization", file:"/samples/sample-utilization.xls", name:"LR Portal Utilization.xls", desc:"498 schools • Zamboanga Sibugay • Downloads, participation", meta:"498 rows • 6 cols", accent:"from-orange-500 to-amber-500", icon:"school"},
-                  {title:"LR Portal — Registered Users", file:"/samples/sample-registered.xls", name:"LR Portal Registered Users.xls", desc:"7 users • Gender, Role, Downloads, Registered date", meta:"7 rows • 10 cols", accent:"from-indigo-600 to-blue-500", icon:"users"},
-                ].map(c=>(
-                  <button key={c.file} onClick={()=>loadSample(c.file,c.name)} className="text-left bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-slate-300 flex gap-4">
-                    <div className={`size-12 rounded-2xl bg-gradient-to-br ${c.accent} grid place-items-center text-white`}>{c.icon==="school"?<SchoolIcon />:<UsersIcon />}</div>
-                    <div className="flex-1 min-w-0"><div className="font-semibold text-slate-900">{c.title}</div><div className="text-xs text-slate-600 mt-1">{c.desc}</div><div className="mt-2 inline-flex text-[11px] font-medium bg-slate-900 text-white px-2.5 py-1 rounded-full">Load → <span className="opacity-60">{c.meta}</span></div></div>
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="grid md:grid-cols-4 gap-3">
-              {[
-                {t:"Snapshot history",d:"Historical comparison requires saved snapshots"},
-                {t:"Data bars",d:"Downloads bars + participation scale"},
-                {t:"Validation",d:"9 checks before presenting"},
-                {t:"Quality",d:"Complete / missing / dup / status"},
-              ].map(f=>(
-                <div key={f.t} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
-                  <div className="font-semibold text-sm text-slate-900">{f.t}</div><div className="text-xs text-slate-600 mt-1">{f.d}</div>
-                </div>
-              ))}
-            </div>
+        )}
+        {view==="trends" && (
+          <div id="panel-trends" role="region" aria-label="Snapshot trends" tabIndex={0} className="outline-none">
+            <SnapshotHistory sourceFile={sourceFile} module={snapshotModule} reportingPeriod={reportingPeriod} />
           </div>
-        ):(
+        )}
+        {REPORT_VIEWS.includes(view) && (
+          !wb ? (
+            <div className="space-y-4">
+              <div className="bg-white border border-slate-200 rounded-2xl p-8 sm:p-10 text-center shadow-sm">
+                <h2 className="text-xl font-extrabold text-slate-900">No workbook loaded</h2>
+                <p className="mt-2 text-sm text-slate-600 max-w-md mx-auto">Open a saved snapshot from the database to render the report directly, or load an Excel export.</p>
+                <div className="mt-5 flex flex-wrap justify-center gap-2">
+                  <button onClick={()=>fileRef.current?.click()} className="px-4 py-2.5 rounded-full bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800">Open Excel file</button>
+                  <button onClick={()=>setView("uploads")} className="px-4 py-2.5 rounded-full border border-slate-200 bg-white text-sm font-semibold hover:bg-slate-50">Upload &amp; save snapshot</button>
+                  <button onClick={()=>void loadSample("/samples/sample-utilization.xls","LR Portal Utilization.xls")} className="px-4 py-2.5 rounded-full border border-slate-200 bg-white text-sm font-semibold hover:bg-slate-50">Load school sample</button>
+                </div>
+              </div>
+              <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                <div className="px-5 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-bold text-slate-900">SAVED SNAPSHOTS</div>
+                    <div className="text-xs text-slate-600">Open stored data without re-uploading the original Excel file</div>
+                  </div>
+                  <button onClick={()=>void loadSavedSnapshots()} disabled={savedStatus==="loading"} className="px-3 py-1.5 rounded-full border border-slate-200 bg-white text-xs font-semibold hover:bg-slate-50 disabled:opacity-40">{savedStatus==="loading"?"Loading…":"Refresh"}</button>
+                </div>
+                {savedStatus==="idle"||savedStatus==="loading"?(
+                  <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3 p-4" aria-busy="true" aria-live="polite">
+                    {[1,2,3].map(i=><div key={i} className="h-[104px] rounded-xl bg-slate-100 animate-pulse"/>)}
+                  </div>
+                ):savedStatus==="unavailable"?(
+                  <div className="p-8 text-center text-sm text-slate-600">Snapshot service unavailable. Run the app with <b className="text-slate-800">pnpm preview:worker</b>, then refresh.</div>
+                ):savedSnapshots.length?(
+                  <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3 p-4 max-h-[420px] overflow-auto">
+                    {savedSnapshots.map(snapshot=>(
+                      <button key={snapshot.id} onClick={()=>void openSnapshot(snapshot.id)} className="text-left bg-white border border-slate-200 rounded-xl p-4 hover:border-indigo-300 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-indigo-500">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className={`text-[11px] font-semibold border rounded-full px-2 py-0.5 ${snapshot.module==="school"?"bg-indigo-50 text-indigo-700 border-indigo-200":"bg-sky-50 text-sky-700 border-sky-200"}`}>{snapshot.module==="school"?"School":"Member"}</span>
+                          <span className="text-xs text-slate-500">{fmt(snapshot.record_count)} rows</span>
+                        </div>
+                        <div className="mt-2 text-sm font-bold text-slate-900">{fmtPeriod(snapshot.reporting_period)}</div>
+                        <div className="text-xs text-slate-600 truncate" title={snapshot.original_filename}>{snapshot.original_filename}</div>
+                        <div className="mt-2 text-xs font-semibold text-indigo-600">Open snapshot →</div>
+                      </button>
+                    ))}
+                  </div>
+                ):(
+                  <div className="p-8 text-center text-sm text-slate-600">No saved snapshots yet. <button onClick={()=>setView("uploads")} className="font-semibold text-indigo-600 underline">Upload and save one</button>.</div>
+                )}
+              </div>
+            </div>
+          ) : (
           <div className="space-y-5">
             {/* Dashboard Header per spec section 3.1 */}
             <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
@@ -556,7 +610,7 @@ function AppShell({ user, onLogout }: { user: string; onLogout: () => void }){
             </div>
 
             {view==="dashboard" && (
-              <div id="panel-dashboard" role="tabpanel" aria-labelledby="tab-dashboard" tabIndex={0} className="space-y-4 outline-none">
+              <div id="panel-dashboard" role="region" aria-label="Report dashboard" tabIndex={0} className="space-y-4 outline-none">
                 {loading && <div aria-busy="true" aria-live="polite" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">{[1,2,3,4,5].map(i=><div key={i} className="bg-white border border-slate-200 rounded-2xl p-4 animate-pulse"><div className="h-3 w-20 bg-slate-200 rounded-full"/><div className="h-8 w-24 bg-slate-200 rounded mt-3"/><div className="h-3 w-32 bg-slate-100 rounded mt-2"/></div>)}</div>}
                 {isSearchPending && !loading && <div role="status" aria-live="polite" className="text-xs text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-full px-3 py-1.5 inline-flex items-center gap-2"><span className="size-2 rounded-full bg-indigo-600 animate-pulse"/>Searching…</div>}
                 {/* KPI row as per spec section 4 + change indicators */}
@@ -610,7 +664,7 @@ function AppShell({ user, onLogout }: { user: string; onLogout: () => void }){
                   <div className="px-5 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <div className="text-sm font-bold text-slate-900">HISTORICAL TREND</div>
-                      <div className="text-xs text-slate-600">{snapshotStatus==="unavailable" ? "Snapshot service unavailable — save snapshots from Admin" : snapshotTrend.length ? `${snapshotTrend.length} saved reporting period${snapshotTrend.length===1?"":"s"} • school snapshots` : "Save school snapshots to unlock the monthly trend"}</div>
+                      <div className="text-xs text-slate-600">{snapshotStatus==="unavailable" ? "Snapshot service unavailable — save snapshots from Uploads & Snapshots" : snapshotTrend.length ? `${snapshotTrend.length} saved reporting period${snapshotTrend.length===1?"":"s"} • school snapshots` : "Save school snapshots to unlock the monthly trend"}</div>
                     </div>
                     <div className="flex items-center gap-2">
                       <label className="sr-only" htmlFor="trend-metric">Trend metric</label>
@@ -648,8 +702,8 @@ function AppShell({ user, onLogout }: { user: string; onLogout: () => void }){
                   ) : (
                     <div className="p-8 text-center">
                       <div className="text-sm font-semibold text-slate-800">{snapshotStatus==="unavailable" ? "Snapshot service is not reachable" : "No saved snapshots yet"}</div>
-                      <div className="text-xs text-slate-600 mt-1 max-w-md mx-auto">{snapshotStatus==="unavailable" ? "Run the app with the Cloudflare Pages worker (pnpm preview:worker) to reach the snapshot API." : "This upload is treated as the current baseline. Open Admin, validate a school export, and save it as a snapshot to start the trend."}</div>
-                      <button onClick={()=>setView("admin")} className="mt-3 px-4 py-2 rounded-full bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800">Open Admin</button>
+                      <div className="text-xs text-slate-600 mt-1 max-w-md mx-auto">{snapshotStatus==="unavailable" ? "Run the app with the Cloudflare Pages worker (pnpm preview:worker) to reach the snapshot API." : "This upload is treated as the current baseline. Upload &amp; save snapshot, validate a school export, and save it as a snapshot to start the trend."}</div>
+                      <button onClick={()=>setView("uploads")} className="mt-3 px-4 py-2 rounded-full bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800">Upload &amp; save snapshot</button>
                     </div>
                   )}
                 </div>
@@ -754,8 +808,8 @@ function AppShell({ user, onLogout }: { user: string; onLogout: () => void }){
                   ) : (
                     <div className="p-8 text-center">
                       <div className="text-sm font-semibold text-slate-800">{snapshotStatus==="unavailable" ? "Snapshot service is not reachable" : "Two saved school snapshots are required"}</div>
-                      <div className="text-xs text-slate-600 mt-1 max-w-md mx-auto">{snapshotStatus==="unavailable" ? "Run the app with the Cloudflare Pages worker (pnpm preview:worker) to load saved comparisons." : "Save another school export as a snapshot in Admin to enable increased, decreased, new, and missing comparisons."}</div>
-                      <button onClick={()=>setView("admin")} className="mt-3 px-4 py-2 rounded-full bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800">Open Admin</button>
+                      <div className="text-xs text-slate-600 mt-1 max-w-md mx-auto">{snapshotStatus==="unavailable" ? "Run the app with the Cloudflare Pages worker (pnpm preview:worker) to load saved comparisons." : "Save another school export as a snapshot in Uploads & Snapshots to enable increased, decreased, new, and missing comparisons."}</div>
+                      <button onClick={()=>setView("uploads")} className="mt-3 px-4 py-2 rounded-full bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800">Upload &amp; save snapshot</button>
                     </div>
                   )}
                 </div>
@@ -770,7 +824,7 @@ function AppShell({ user, onLogout }: { user: string; onLogout: () => void }){
             )}
 
             {view==="school" && (
-              <div id="panel-school" role="tabpanel" aria-labelledby="tab-school" tabIndex={0} className="space-y-4 outline-none">
+              <div id="panel-school" role="region" aria-label="School analysis" tabIndex={0} className="space-y-4 outline-none">
                 <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-wrap items-center gap-3">
                   <span className="text-xs font-bold tracking-widest uppercase text-slate-600">School Analysis</span>
                   <label className="sr-only" htmlFor="ranking-metric-school">Ranking metric</label>
@@ -860,7 +914,7 @@ function AppShell({ user, onLogout }: { user: string; onLogout: () => void }){
             )}
 
             {view==="users" && (
-              <div id="panel-users" role="tabpanel" aria-labelledby="tab-users" tabIndex={0} className="space-y-4 outline-none">
+              <div id="panel-users" role="region" aria-label="User analysis" tabIndex={0} className="space-y-4 outline-none">
                 {userKPIs?(
                   <>
                     <div className="grid lg:grid-cols-3 gap-4">
@@ -927,27 +981,8 @@ function AppShell({ user, onLogout }: { user: string; onLogout: () => void }){
               </div>
             )}
 
-            {view==="comparison" && (
-              <div id="panel-comparison" role="tabpanel" aria-labelledby="tab-comparison" tabIndex={0} className="space-y-4 outline-none">
-                <div className="bg-white border border-slate-200 rounded-2xl p-1.5 inline-flex items-center gap-1.5 shadow-sm">
-                  {(["school","member","duplicates"] as const).map(mode=>(
-                    <button key={mode} onClick={()=>setComparisonMode(mode)} aria-pressed={comparisonMode===mode} className={`px-4 py-2 rounded-full text-sm font-bold transition focus-visible:ring-2 focus-visible:ring-indigo-500 ${comparisonMode===mode?"bg-slate-900 text-white shadow":"text-slate-600 hover:bg-slate-50"}`}>
-                      {mode==="school"?"School Comparison":mode==="member"?"Member Comparison":"Duplicate Review"}
-                    </button>
-                  ))}
-                </div>
-                {comparisonMode==="school"?<SchoolComparison />:comparisonMode==="member"?<MemberComparison />:<DuplicateReview />}
-              </div>
-            )}
-
-            {view==="trends" && (
-              <div id="panel-trends" role="tabpanel" aria-labelledby="tab-trends" tabIndex={0} className="space-y-4 outline-none">
-                <SnapshotHistory sourceFile={sourceFile} module={snapshotModule} reportingPeriod={reportingPeriod} />
-              </div>
-            )}
-
             {view==="data" && (
-              <div id="panel-data" role="tabpanel" aria-labelledby="tab-data" tabIndex={0} className="space-y-4 outline-none">
+              <div id="panel-data" role="region" aria-label="Detailed data" tabIndex={0} className="space-y-4 outline-none">
                 <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-wrap items-center gap-3">
                   <span className="text-sm font-bold text-slate-900">Detailed Data</span>
                   <span className="text-xs text-slate-600">Raw records retained separate from visuals • search reduces rows • export keeps filtered view</span>
@@ -1049,13 +1084,17 @@ function AppShell({ user, onLogout }: { user: string; onLogout: () => void }){
               </div>
             )}
           </div>
+          )
         )}
       </main>
 
-      {toast && <div role="status" aria-live="polite" className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-sm font-medium px-4 py-2.5 rounded-full shadow-xl z-50">{toast}</div>}
       <footer className="border-t border-slate-200 mt-8 py-6 text-center text-xs text-slate-600">
         Sheetly • Monthly Visual Report System • Data → Information → Visualization → Insight • Print hides controls • All local
       </footer>
+        </div>
+      </div>
+
+      {toast && <div role="status" aria-live="polite" className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-sm font-medium px-4 py-2.5 rounded-full shadow-xl z-50">{toast}</div>}
     </div>
   )
 }

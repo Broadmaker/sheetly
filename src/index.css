@@ -36,7 +36,7 @@ button, a[role="button"], select, input[type="search"], input[type="text"] { min
 .text-slate-600 { color: #475569; }
 
 @media print {
-  header, .no-print { display: none !important; }
+  header, aside, .no-print { display: none !important; }
   main { padding: 0 !important; }
   [class*="overflow-auto"], [class*="max-h-"] { overflow: visible !important; max-height: none !important; }
   table { page-break-inside: auto; }

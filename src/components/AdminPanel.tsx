@@ -287,15 +287,15 @@ export default function AdminPanel({ onOpenComparison, onBack }: Props) {
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
         <div className="px-5 sm:px-6 py-5 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <div className="text-xs font-bold tracking-[0.18em] uppercase text-indigo-600">Admin workspace</div>
-            <h1 className="text-[22px] sm:text-[26px] font-extrabold tracking-tight text-slate-900 mt-1">Upload, validate, and compare snapshots</h1>
+            <div className="text-xs font-bold tracking-[0.18em] uppercase text-indigo-600">Uploads & snapshots</div>
+            <h1 className="text-[22px] sm:text-[26px] font-extrabold tracking-tight text-slate-900 mt-1">Import, validate, and save snapshots</h1>
             <p className="text-sm text-slate-600 mt-2 max-w-2xl">Drop a school or member export, review the validation result, save an immutable snapshot, and compare school reporting periods.</p>
           </div>
           <div className="flex gap-2">
             <button onClick={() => void loadDashboard()} disabled={busy !== null} className="px-3 py-2 rounded-full border border-slate-200 bg-white text-xs font-semibold hover:bg-slate-50 disabled:opacity-40">
               {busy === "refresh" ? "Refreshing…" : "Refresh"}
             </button>
-            <button onClick={onBack} className="px-3 py-2 rounded-full bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800">Back to report</button>
+            <button onClick={onBack} className="px-3 py-2 rounded-full bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800">Back to overview</button>
           </div>
         </div>
       </div>
