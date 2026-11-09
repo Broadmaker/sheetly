@@ -17,6 +17,7 @@ import SchoolComparison from "./components/SchoolComparison"
 import MemberComparison from "./components/MemberComparison"
 import DuplicateReview from "./components/DuplicateReview"
 import FindMember from "./components/FindMember"
+import EmailValidation from "./components/EmailValidation"
 import AdminPanel from "./components/AdminPanel"
 import Login from "./components/Login"
 import AppSidebar, { Brand, MobileNav } from "./components/AppSidebar"
@@ -80,6 +81,7 @@ const VIEW_TITLES: Record<AppView,string> = {
   comparison:"Comparison",
   duplicates:"Duplicate Review",
   find:"Find a Member",
+  email:"Email Validation",
   data:"Detailed Data",
 }
 
@@ -532,6 +534,11 @@ function AppShell({ user, onLogout }: { user: string; onLogout: () => void }){
         {view==="find" && (
           <div id="panel-find" role="region" aria-label="Find a member" tabIndex={0} className="outline-none">
             <FindMember />
+          </div>
+        )}
+        {view==="email" && (
+          <div id="panel-email" role="region" aria-label="Email validation" tabIndex={0} className="outline-none">
+            <EmailValidation />
           </div>
         )}
         {view==="trends" && (

@@ -8,6 +8,7 @@ export type AppView =
   | "comparison"
   | "duplicates"
   | "find"
+  | "email"
   | "data"
 
 export const REPORT_VIEWS: AppView[] = ["dashboard", "school", "users", "data"]
@@ -41,6 +42,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { view: "comparison", label: "Comparison", hint: "Period to period" },
       { view: "duplicates", label: "Duplicate Review", hint: "Account matches" },
       { view: "find", label: "Find a Member", hint: "ID, name, or email" },
+      { view: "email", label: "Email Validation", hint: "DepEd domain policy" },
     ],
   },
   {
