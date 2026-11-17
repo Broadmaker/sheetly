@@ -17,6 +17,8 @@ interface UploadRow {
   record_count: number | null
   download_basis: string | null
   snapshot_created_at: string | null
+  school_id: string | null
+  school_name: string | null
 }
 
 function jsonError(message: string, status = 400): Response {
@@ -63,9 +65,11 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   const result = await env.DB.prepare(
     `SELECT u.id, u.module, u.original_filename, u.checksum_sha256, u.size_bytes,
             u.reporting_period, u.export_date, u.uploaded_at, u.status, u.validation_summary_json,
+            u.school_id, sc.school_name,
             s.id AS snapshot_id, s.record_count, s.download_basis, s.created_at AS snapshot_created_at
      FROM uploads u
      LEFT JOIN snapshots s ON s.upload_id = u.id
+     LEFT JOIN schools sc ON sc.school_id = u.school_id
      ${where}
      ORDER BY u.uploaded_at DESC
      LIMIT ?`,
@@ -83,6 +87,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     exportDate: row.export_date,
     uploadedAt: row.uploaded_at,
     status: row.status,
+    schoolId: row.school_id,
+    schoolName: row.school_name,
     validation: parseValidation(row.validation_summary_json),
     snapshot: row.snapshot_id
       ? {

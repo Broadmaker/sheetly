@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react"
-import { AlertIcon } from "./icons"
+import { AlertIcon, ChartIcon, SchoolIcon, ShieldIcon, UsersIcon } from "./icons"
 
 interface LoginProps {
   onSuccess: (user: string) => void
@@ -34,19 +34,27 @@ export default function Login({ onSuccess }: LoginProps) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-10">
-      <div className="w-full max-w-[420px]">
-        <div className="flex items-center gap-3 justify-center mb-6">
-          <div className="size-11 rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-500 grid place-items-center text-white font-black text-base shadow-lg shadow-indigo-600/20">LR</div>
-          <div className="leading-tight">
-            <div className="font-bold tracking-tight text-slate-900 text-lg">LEARNING RESOURCE PORTAL</div>
-            <div className="text-[11px] font-semibold tracking-[0.16em] uppercase text-slate-600">Monthly Visual Report</div>
+    <div className="min-h-screen bg-slate-100 p-3 sm:p-5">
+      <div className="mx-auto grid min-h-[calc(100vh-1.5rem)] max-w-[1180px] overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl shadow-slate-900/10 sm:min-h-[calc(100vh-2.5rem)] lg:grid-cols-[1.05fr_0.95fr]">
+        <section className="relative hidden overflow-hidden bg-gradient-to-br from-slate-950 via-indigo-950 to-indigo-900 p-10 text-white lg:flex lg:flex-col lg:justify-between">
+          <div className="pointer-events-none absolute -right-32 -top-32 size-96 rounded-full bg-violet-500/25 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-40 -left-20 size-96 rounded-full bg-sky-500/15 blur-3xl" />
+          <div className="relative">
+            <div className="flex items-center gap-3"><div className="grid size-11 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-base font-black shadow-lg shadow-black/20">LR</div><div><div className="font-black tracking-tight">LR Portal</div><div className="text-[10px] font-bold uppercase tracking-[0.16em] text-indigo-300">School Monitoring</div></div></div>
+            <h1 className="mt-16 max-w-lg text-4xl font-black leading-tight tracking-tight">Reliable school data.<br /><span className="text-indigo-300">Clearer decisions.</span></h1>
+            <p className="mt-4 max-w-lg text-sm leading-relaxed text-indigo-100">A focused workspace for utilization reporting, school rosters, member quality, and period-to-period monitoring.</p>
           </div>
-        </div>
+          <div className="relative grid grid-cols-3 gap-3">
+            {[{ label: "School directory", icon: <SchoolIcon className="size-5" /> }, { label: "Roster monitoring", icon: <UsersIcon className="size-5" /> }, { label: "Utilization insights", icon: <ChartIcon className="size-5" /> }].map((item) => <div key={item.label} className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur"><div className="text-indigo-300">{item.icon}</div><div className="mt-3 text-xs font-semibold text-white">{item.label}</div></div>)}
+          </div>
+        </section>
 
-        <div className="bg-white border border-slate-200 rounded-[24px] shadow-xl shadow-slate-900/5 p-6 sm:p-7">
-          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Sign in</h1>
-          <p className="mt-1 text-sm text-slate-600">Enter the access credentials to open the monitoring dashboard.</p>
+        <section className="flex items-center justify-center px-5 py-10 sm:px-10 lg:px-14">
+          <div className="w-full max-w-[420px]">
+            <div className="mb-8 lg:hidden"><div className="flex items-center gap-3"><div className="grid size-11 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-base font-black text-white shadow-lg shadow-indigo-600/20">LR</div><div><div className="font-black tracking-tight text-slate-950">LR Portal</div><div className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">School Monitoring</div></div></div></div>
+            <div className="mb-6 grid size-11 place-items-center rounded-xl bg-indigo-50 text-indigo-600"><ShieldIcon className="size-5" /></div>
+            <h2 className="text-3xl font-black tracking-tight text-slate-950">Welcome back</h2>
+            <p className="mt-2 text-sm text-slate-500">Sign in with your authorized workspace credentials.</p>
 
           <form onSubmit={submit} className="mt-6 space-y-4">
             <div>
@@ -60,7 +68,7 @@ export default function Login({ onSuccess }: LoginProps) {
                 required
                 value={username}
                 onChange={(event) => setUsername(event.target.value)}
-                className="mt-1.5 w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-900 outline-none focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm text-slate-900 outline-none focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-500/10"
               />
             </div>
 
@@ -75,7 +83,7 @@ export default function Login({ onSuccess }: LoginProps) {
                   required
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  className="w-full px-3.5 pr-20 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-900 outline-none focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 pr-20 text-sm text-slate-900 outline-none focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-500/10"
                 />
                 <button
                   type="button"
@@ -98,14 +106,14 @@ export default function Login({ onSuccess }: LoginProps) {
             <button
               type="submit"
               disabled={loading || !username.trim() || !password}
-              className="w-full py-3 rounded-xl bg-slate-900 text-white font-semibold text-sm hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-indigo-500"
+              className="w-full rounded-xl bg-slate-950 py-3 text-sm font-bold text-white shadow-lg shadow-slate-900/15 hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-indigo-500"
             >
               {loading ? "Signing in…" : "Sign in"}
             </button>
           </form>
-        </div>
-
-        <p className="mt-5 text-center text-[11px] text-slate-500">Private access • Session lasts 7 days</p>
+            <div className="mt-5 flex items-center justify-center gap-2 text-[11px] text-slate-400"><ShieldIcon className="size-3.5" /> Private workspace · Session lasts 7 days</div>
+          </div>
+        </section>
       </div>
     </div>
   )

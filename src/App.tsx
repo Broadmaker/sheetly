@@ -1,1177 +1,210 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
-import * as XLSX from "xlsx"
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell,
-  AreaChart, Area
-} from "recharts"
-import {
-  cleanValue,
-  isDateLike,
-  parseDate,
-  parseWorkbookBuffer,
-  toNumber,
-  type WorkbookData,
-} from "./lib/workbook"
-import SnapshotHistory from "./components/SnapshotHistory"
-import SchoolComparison from "./components/SchoolComparison"
-import MemberComparison from "./components/MemberComparison"
-import DuplicateReview from "./components/DuplicateReview"
-import FindMember from "./components/FindMember"
-import EmailValidation from "./components/EmailValidation"
-import UploadHistory from "./components/UploadHistory"
-import AuditLog from "./components/AuditLog"
-import AdminPanel from "./components/AdminPanel"
-import Login from "./components/Login"
+import { useEffect, useState } from "react"
 import AppSidebar, { Brand, MobileNav } from "./components/AppSidebar"
-import AdminOverview from "./components/AdminOverview"
-import { REPORT_VIEWS, type AppView } from "./lib/navigation"
-import {
-  AlertIcon,
-  CalendarIcon,
-  CheckIcon,
-  SearchIcon,
-} from "./components/icons"
+import SchoolDirectory from "./components/SchoolDirectory"
+import SchoolUsers from "./components/SchoolUsers"
+import ImportPanel from "./components/ImportPanel"
+import WorkspaceOverview from "./components/WorkspaceOverview"
+import Login from "./components/Login"
+import { NAV_SECTIONS, type AppView } from "./lib/navigation"
+import { AlertIcon, ExternalLinkIcon, GithubIcon, LockIcon, UploadIcon } from "./components/icons"
 
-// Types
-type ColType = "number" | "percent" | "date" | "string"
-type TrendMetric = "totalDownloads" | "totalRegistered" | "totalActual"
-type TrendPoint = {
-  id: string
-  period: string
-  exportDate: string | null
-  recordCount: number
-  createdAt: string
-  totalRegistered: number
-  totalActual: number
-  totalDownloads: number
-  activeSchools: number
-  participationRate: number
-}
-type SnapshotComparison = {
-  previousPeriod: string
-  currentPeriod: string
-  totalSchools: number
-  previousSchools: number
-  totalDownloads: number
-  previousDownloads: number
-  increased: number
-  decreased: number
-  noChange: number
-  newSchools: number
-  missingSchools: number
-  invalid: number
-}
-type SavedSnapshot = {
-  id: string
-  module: "school" | "member"
-  reporting_period: string
-  record_count: number
-  original_filename: string
-  created_at: string
-  uploaded_at: string
+const VIEW_TITLES: Record<AppView, string> = {
+  overview: "Overview",
+  uploads: "Uploads & Snapshots",
+  directory: "Schools",
+  roster: "School Users",
+  trends: "Snapshot Trends",
+  dashboard: "Report Dashboard",
+  school: "School Analysis",
+  users: "User Analysis",
+  comparison: "Comparison",
+  duplicates: "Duplicate Review",
+  find: "Find a Member",
+  email: "Email Validation",
+  history: "Upload History",
+  audit: "Audit Logs",
+  data: "Detailed Data",
 }
 
-const COLORS = ["#7c3aed","#f97316","#06b6d4","#10b981","#e11d48","#8b5cf6","#f59e0b","#14b8a6","#6366f1","#ec4899"]
-const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"]
-const VIEW_TITLES: Record<AppView,string> = {
-  overview:"Overview",
-  uploads:"Uploads & Snapshots",
-  trends:"Snapshot Trends",
-  dashboard:"Report Dashboard",
-  school:"School Analysis",
-  users:"User Analysis",
-  comparison:"Comparison",
-  duplicates:"Duplicate Review",
-  find:"Find a Member",
-  email:"Email Validation",
-  history:"Upload History",
-  audit:"Audit Logs",
-  data:"Detailed Data",
+const VIEW_DESCRIPTIONS: Record<AppView, string> = {
+  overview: "Division-level school roster and utilization summary",
+  uploads: "Import, validate, and save reporting snapshots",
+  directory: "Browse the fixed master list and school coverage",
+  roster: "Review users and compare roster periods",
+  trends: "Review changes across reporting periods",
+  dashboard: "Division reporting and performance indicators",
+  school: "School-level utilization analysis",
+  users: "Member-level account and activity analysis",
+  comparison: "Compare reporting periods and records",
+  duplicates: "Review possible duplicate member records",
+  find: "Locate a member across school rosters",
+  email: "Review account email quality and compliance",
+  history: "Review completed file imports",
+  audit: "Review system and data actions",
+  data: "Inspect detailed reporting records",
 }
 
-// ---------- helpers ----------
-function fmt(n: number) { return n.toLocaleString("en-US") }
-function fmtCompact(n: number) { if (n>=1_000_000) return (n/1_000_000).toFixed(2).replace(/\.00$/,"")+"M"; if(n>=1000) return (n/1000).toFixed(1).replace(/\.0$/,"")+"k"; return fmt(Math.round(n)) }
-function fmtPeriod(period:string){ const [year,month]=period.split("-"); const idx=Number(month)-1; return idx>=0&&idx<12? `${MONTHS[idx].slice(0,3)} ${year}`:period }
-function pctChange(current:number, previous:number){ return previous? ((current-previous)/previous)*100 : null }
-function isIdColumn(h:string){ return /\bid\b/i.test(h) }
-function median(arr:number[]){ if(!arr.length) return 0; const s=[...arr].sort((a,b)=>a-b); const m=Math.floor(s.length/2); return s.length%2?s[m]:(s[m-1]+s[m])/2 }
+const UNAVAILABLE_VIEWS = new Set<AppView>(
+  NAV_SECTIONS.flatMap((section) => section.items)
+    .filter((item) => item.unavailable)
+    .map((item) => item.view),
+)
 
-function inferType(values:any[]):ColType{
-  const total=values.filter(v=>cleanValue(v)!=="").length; if(!total) return "string"
-  let num=0,pct=0,dat=0
-  for(const v of values){ const s=cleanValue(v); if(!s) continue; if(s.endsWith("%")&&toNumber(s)!==null) pct++; else if(toNumber(s)!==null) num++; if(isDateLike(s)) dat++}
-  if(dat/total>0.6) return "date"
-  if((num+pct)/total>0.6){ if(pct/total>0.35) return "percent"; return "number" }
-  return "string"
-}
-function detectType(headers:string[]):"school"|"user"|"generic"{
-  const h=headers.map(x=>x.toLowerCase())
-  if(h.includes("school id")||h.includes("school name")||h.includes("registered users")) return "school"
-  if(h.includes("portal role")||h.includes("total downloads")&&h.includes("gender")) return "user"
-  if(h.some(x=>x.includes("school"))) return "school"
-  if(h.some(x=>x.includes("gender")||x.includes("portal role"))) return "user"
-  return "generic"
-}
-function parseWorkbook(file:File):Promise<WorkbookData>{
-  return new Promise((resolve,reject)=>{
-    const reader=new FileReader()
-    reader.onload=e=>{
-      try{
-        resolve(parseWorkbookBuffer(e.target?.result as ArrayBuffer,file.name))
-      }catch(err){reject(err)}
-    }
-    reader.onerror=reject; reader.readAsArrayBuffer(file)
-  })
-}
-function Tip({active,payload,label}:any){
-  if(!active||!payload?.length) return null
-  return (
-    <div className="bg-slate-900 text-white text-xs rounded-xl px-3 py-2 shadow-xl border border-slate-800 max-w-[300px]">
-      <div className="font-semibold truncate">{label ?? payload[0]?.name ?? payload[0]?.payload?.name}</div>
-      {payload.map((p:any,i:number)=>(
-        <div key={i} className="flex items-center gap-2 mt-0.5">
-          <span className="size-2 rounded-full" style={{background:p.color||p.fill||COLORS[i%COLORS.length]}}/>
-          <span className="opacity-80">{p.name||p.dataKey}:</span>
-          <span className="font-mono font-semibold">{typeof p.value==="number"?fmt(p.value):String(p.value)}</span>
-        </div>
-      ))}
-    </div>
-  )
-}
+function AppShell({ user, onLogout }: { user: string; onLogout: () => void }) {
+  const [view, setView] = useState<AppView>("overview")
+  const [selectedSchoolId, setSelectedSchoolId] = useState<string | null>(null)
 
-// School KPI calc
-function calcSchoolKPIs(rows:Record<string,any>[]){
-  const totalSchools=rows.length
-  const reg = rows.map(r=>toNumber(r["REGISTERED USERS"])??0)
-  const act = rows.map(r=>toNumber(r["ACTUAL USERS"])??0)
-  const dls = rows.map(r=>toNumber(r["DOWNLOADS"])??0)
-  const parts = rows.map(r=>{ const v=cleanValue(r["PARTICIPATION RATE"]); const n=toNumber(v); return n==null?0:n })
-  const totalRegistered=reg.reduce((a,b)=>a+b,0)
-  const totalActual=act.reduce((a,b)=>a+b,0)
-  const totalDownloads=dls.reduce((a,b)=>a+b,0)
-  const avgParticipation = totalRegistered? (totalActual/totalRegistered*100) : (parts.length? parts.reduce((a,b)=>a+b,0)/parts.length : 0)
-  const activeSchools = dls.filter(n=>n>0).length
-  const inactiveSchools = totalSchools - activeSchools
-  const avgDownloads = totalSchools? totalDownloads/totalSchools:0
-  const maxDownloads = dls.length? Math.max(...dls):0
-  const minDownloads = dls.length? Math.min(...dls):0
-  return { totalSchools, totalRegistered, totalActual, avgParticipation, totalDownloads, activeSchools, inactiveSchools, avgDownloads, maxDownloads, minDownloads, reg, act, dls, parts }
-}
-function activityBucket(n:number){
-  if(n===0) return "No Activity"
-  if(n<=20) return "Low Activity"
-  if(n<=100) return "Moderate Activity"
-  return "High Activity"
-}
-
-function AppShell({ user, onLogout }: { user: string; onLogout: () => void }){
-  const [wb,setWb]=useState<WorkbookData|null>(null)
-  const [sourceFile,setSourceFile]=useState<File|null>(null)
-  const [sheetIdx,setSheetIdx]=useState(0)
-  const [view,setView]=useState<AppView>("overview")
-  const [loading,setLoading]=useState(false)
-  const [search,setSearch]=useState("")
-  const deferredSearch=useDeferredValue(search)
-  const [sortKey,setSortKey]=useState("")
-  const [sortDir,setSortDir]=useState<"asc"|"desc">("asc")
-  const [page,setPage]=useState(1)
-  const [pageSize,setPageSize]=useState(25)
-  const [visibleCols,setVisibleCols]=useState<string[]|null>(null)
-  const [reportingMonth,setReportingMonth]=useState("September")
-  const [reportingYear,setReportingYear]=useState("2026")
-  const [schoolFilter,setSchoolFilter]=useState("All Schools")
-  const [rankingMetric,setRankingMetric]=useState<"DOWNLOADS"|"REGISTERED USERS"|"ACTUAL USERS"|"PARTICIPATION RATE">("DOWNLOADS")
-  const fileRef=useRef<HTMLInputElement>(null)
-  const [lastUpdated,setLastUpdated]=useState<string>(()=> new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}))
-  const [toast,setToast]=useState<string|null>(null)
-  const [snapshotTrend,setSnapshotTrend]=useState<TrendPoint[]>([])
-  const [snapshotComparison,setSnapshotComparison]=useState<SnapshotComparison|null>(null)
-  const [snapshotStatus,setSnapshotStatus]=useState<"loading"|"ready"|"unavailable">("loading")
-  const [trendMetric,setTrendMetric]=useState<TrendMetric>("totalDownloads")
-  const [comparisonMode,setComparisonMode]=useState<"school"|"member">("school")
-  const [savedSnapshots,setSavedSnapshots]=useState<SavedSnapshot[]>([])
-  const [savedStatus,setSavedStatus]=useState<"idle"|"loading"|"ready"|"unavailable">("idle")
-  const isSearchPending = search !== deferredSearch
-
-  const active = wb?.sheets[sheetIdx] ?? null
-  const datasetType = useMemo(()=> active? detectType(active.headers):"generic", [active])
-  const snapshotModule: "school" | "member" | null = datasetType==="school"?"school":datasetType==="user"?"member":null
-  const reportingPeriod = useMemo(()=> `${reportingYear}-${String(MONTHS.indexOf(reportingMonth)+1).padStart(2,"0")}`, [reportingMonth,reportingYear])
-
-  const loadSnapshotTrends = useCallback(async()=>{
-    setSnapshotStatus("loading")
-    try{
-      const trendRes=await fetch("/api/snapshots/trends?module=school")
-      if(!trendRes.ok) throw new Error(String(trendRes.status))
-      const trendPayload=await trendRes.json()
-      const trends:TrendPoint[]=Array.isArray(trendPayload.trends)? trendPayload.trends:[]
-      setSnapshotTrend(trends)
-
-      setSnapshotStatus("ready")
-      if(trends.length<2){ setSnapshotComparison(null); return }
-      try{
-        const compareRes=await fetch("/api/comparisons/school",{method:"POST",headers:{"content-type":"application/json"},body:"{}"})
-        if(!compareRes.ok) throw new Error(String(compareRes.status))
-        const compareData=await compareRes.json()
-        const c=compareData?.comparison
-        setSnapshotComparison(c?.summary&&c?.previousSnapshot&&c?.currentSnapshot? {
-          previousPeriod:c.previousSnapshot.reporting_period,
-          currentPeriod:c.currentSnapshot.reporting_period,
-          ...c.summary,
-        }:null)
-      }catch{
-        setSnapshotComparison(null)
-      }
-    }catch{
-      setSnapshotTrend([])
-      setSnapshotComparison(null)
-      setSnapshotStatus("unavailable")
-    }
-  },[])
-
-  useEffect(()=>{ if(view==="dashboard" && wb) void loadSnapshotTrends() },[view,wb,loadSnapshotTrends])
-
-  const loadSavedSnapshots = useCallback(async()=>{
-    setSavedStatus("loading")
-    try{
-      const response=await fetch("/api/snapshots?limit=200")
-      if(!response.ok) throw new Error(String(response.status))
-      const data=await response.json()
-      setSavedSnapshots(Array.isArray(data.snapshots)? data.snapshots:[])
-      setSavedStatus("ready")
-    }catch{
-      setSavedSnapshots([])
-      setSavedStatus("unavailable")
-    }
-  },[])
-
-  useEffect(()=>{ if(REPORT_VIEWS.includes(view) && !wb) void loadSavedSnapshots() },[view,wb,loadSavedSnapshots])
-
-  const openSnapshot = useCallback(async(id:string)=>{
-    setLoading(true)
-    try{
-      const response=await fetch(`/api/snapshots/${encodeURIComponent(id)}`)
-      const data=await response.json().catch(()=>({}))
-      if(!response.ok) throw new Error(data.error ?? `Unable to load snapshot (${response.status})`)
-      const rows:Record<string,any>[]=Array.isArray(data.rows)? data.rows:[]
-      const headers:string[]=Array.isArray(data.headers)&&data.headers.length? data.headers:Object.keys(rows[0]??{})
-      if(!headers.length) throw new Error("This snapshot has no stored records")
-      const period=String(data.snapshot?.reporting_period ?? "")
-      const [year,month]=period.split("-")
-      const monthIndex=Number(month)-1
-      if(year) setReportingYear(year)
-      if(monthIndex>=0&&monthIndex<12) setReportingMonth(MONTHS[monthIndex])
-      const isMember=data.snapshot?.module==="member"
-      setWb({
-        fileName: data.snapshot?.original_filename || `Saved snapshot ${period}`,
-        sheets: [{ name:isMember?"Member Snapshot":"School Snapshot", headers, rows, raw:[] }],
-      })
-      setSourceFile(null); setSheetIdx(0); setVisibleCols(null); setSearch(""); setSortKey(""); setPage(1); setSchoolFilter("All Schools")
-      const uploadedAt=data.snapshot?.uploaded_at? new Date(data.snapshot.uploaded_at):new Date()
-      setLastUpdated(isNaN(uploadedAt.getTime())? new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}) : uploadedAt.toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}))
-      setView(isMember?"users":"dashboard")
-      setToast(`Opened ${period || "saved"} snapshot • ${fmt(rows.length)} rows`)
-    }catch(cause){
-      setToast(cause instanceof Error? cause.message:"Unable to open the saved snapshot")
-    }finally{
-      setLoading(false)
-    }
-  },[])
-
-  async function loadFile(file:File){
-    setLoading(true)
-    try{
-      const data=await parseWorkbook(file); setWb(data); setSourceFile(file); setSheetIdx(0); setView("dashboard"); setVisibleCols(null); setSearch(""); setSortKey(""); setPage(1)
-      setLastUpdated(new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}))
-      // try to infer month from filename e.g. 20260916
-      const m=file.name.match(/20\d{2}(\d{2})(\d{2})/)
-      if(m){ const mo=Number(m[1]); if(mo>=1&&mo<=12){ setReportingMonth(MONTHS[mo-1]); const yr=file.name.match(/(20\d{2})/); if(yr) setReportingYear(yr[1]) } }
-    } finally{setLoading(false)}
-  }
-  async function loadSample(url:string,name:string){
-    setLoading(true)
-    try{
-      const res=await fetch(url); if(!res.ok) throw new Error(String(res.status))
-      const buf=await res.arrayBuffer(); const f=new File([buf],name,{type:"application/vnd.ms-excel"})
-      const data=await parseWorkbook(f); data.fileName=name; setWb(data); setSourceFile(f); setSheetIdx(0); setView("dashboard"); setVisibleCols(null)
-      setLastUpdated(new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}))
-    }catch(e){ console.error(e); alert("Sample load failed") } finally{setLoading(false)}
+  function navigate(next: AppView) {
+    if (UNAVAILABLE_VIEWS.has(next)) return
+    setView(next)
   }
 
-   useEffect(()=>{ if(toast){ const t=setTimeout(()=>setToast(null),2500); return ()=>clearTimeout(t) } },[toast])
-  useEffect(()=>{
-    if(!active) return
-    setVisibleCols(active.headers)
-    setSortKey(""); setSearch(""); setPage(1)
-  },[sheetIdx,wb,active])
+  function openSchool(schoolId: string) {
+    setSelectedSchoolId(schoolId)
+    setView("roster")
+  }
 
-  const columnTypes=useMemo(()=>{
-    if(!active) return {} as Record<string,ColType>
-    const m:Record<string,ColType>={}; active.headers.forEach(h=>m[h]=inferType(active.rows.map(r=>r[h]))); return m
-  },[active])
-  const numericCols=useMemo(()=> active? active.headers.filter(h=> columnTypes[h]==="number"||columnTypes[h]==="percent"):[] ,[active,columnTypes])
-  const metricCols=useMemo(()=> numericCols.filter(h=>!isIdColumn(h)),[numericCols])
-  const displayedHeaders=useMemo(()=> visibleCols?? active?.headers ?? [], [visibleCols,active])
+  function goUpload() {
+    setView("uploads")
+  }
 
-  const filtered=useMemo(()=>{
-    if(!active) return []
-    let rows=active.rows
-    const q=deferredSearch.trim().toLowerCase()
-    if(q) rows=rows.filter(r=> active.headers.some(h=> String(r[h]).toLowerCase().includes(q)))
-    if(schoolFilter!=="All Schools" && datasetType==="school"){
-      rows=rows.filter(r=> cleanValue(r["SCHOOL NAME"])===schoolFilter)
-    }
-    if(sortKey){
-      rows=[...rows].sort((a,b)=>{
-        const t=columnTypes[sortKey]
-        if(t==="number"||t==="percent"){ const an=toNumber(a[sortKey]),bn=toNumber(b[sortKey]); if(an!==null&&bn!==null) return sortDir==="asc"?an-bn:bn-an }
-        if(t==="date"){ const ad=parseDate(a[sortKey])?.getTime()??0, bd=parseDate(b[sortKey])?.getTime()??0; return sortDir==="asc"?ad-bd:bd-ad }
-        const cmp=String(a[sortKey]).localeCompare(String(b[sortKey]),undefined,{numeric:true,sensitivity:"base"}); return sortDir==="asc"?cmp:-cmp
-      })
-    }
-    return rows
-  },[active,deferredSearch,sortKey,sortDir,columnTypes,schoolFilter,datasetType])
-
-  useEffect(()=> setPage(1),[deferredSearch,sortKey,sortDir,sheetIdx,pageSize,schoolFilter])
-  const totalPages=Math.max(1,Math.ceil(filtered.length/pageSize))
-  const paged=useMemo(()=> filtered.slice((page-1)*pageSize,page*pageSize),[filtered,page,pageSize])
-
-  // School KPIs
-  const schoolKPIs=useMemo(()=> {
-    if(datasetType!=="school"||!active) return null
-    // use filtered for live filter effect? spec: KPIs reflect current filter (school selector reduces). But for global KPI we want overall then filtered? We'll show filtered-aware KPIs.
-    const base = calcSchoolKPIs(filtered.length? filtered : active.rows)
-    // also compute overall for comparison note? keep base as filtered, but for "total schools" if filtering single school, show 1 of 498
-    const overall = calcSchoolKPIs(active.rows)
-    return { ...base, overall }
-  },[active,datasetType,filtered])
-
-  // User KPIs
-  const userKPIs=useMemo(()=>{
-    if(datasetType!=="user"||!active) return null
-    const rows=filtered.length? filtered: active.rows
-    const totalUsers=rows.length
-    const activeUsers=rows.filter(r=> cleanValue(r["STATUS"]).toLowerCase()==="active").length
-    const inactiveUsers=totalUsers-activeUsers
-    const totalDownloads=rows.map(r=>toNumber(r["TOTAL DOWNLOADS"])??0).reduce((a,b)=>a+b,0)
-    const byRole=new Map<string,number>(); const byGender=new Map<string,number>()
-    const byDate=new Map<string,number>()
-    for(const r of rows){
-      const role=cleanValue(r["PORTAL ROLE"])||"(blank)"; byRole.set(role,(byRole.get(role)||0)+1)
-      const g=cleanValue(r["GENDER"])||"(blank)"; byGender.set(g,(byGender.get(g)||0)+1)
-      const d=parseDate(r["REGISTERED"]); if(d){ const k=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; byDate.set(k,(byDate.get(k)||0)+1) }
-    }
-    // new users = registered in reporting month
-    const moIdx=MONTHS.indexOf(reportingMonth)
-    let newUsers=0
-    for(const r of rows){ const d=parseDate(r["REGISTERED"]); if(d && d.getMonth()===moIdx && String(d.getFullYear())===reportingYear) newUsers++ }
-    return { totalUsers, activeUsers, inactiveUsers, totalDownloads, byRole:[...byRole.entries()].sort((a,b)=>b[1]-a[1]), byGender:[...byGender.entries()].sort((a,b)=>b[1]-a[1]), byDate:[...byDate.entries()].sort((a,b)=>a[0].localeCompare(b[0])), newUsers }
-  },[active,datasetType,filtered,reportingMonth,reportingYear])
-
-  // Generic numeric summary for generic type
-  const genericSummary=useMemo(()=>{
-    if(datasetType!=="generic"||!active||!metricCols.length) return []
-    return metricCols.slice(0,4).map(col=>{ const nums=active.rows.map(r=>toNumber(r[col])).filter(n=>n!==null) as number[]; if(!nums.length) return null; const sum=nums.reduce((a,b)=>a+b,0); return {col,sum,avg:sum/nums.length, med:median(nums), max:Math.max(...nums), min:Math.min(...nums)} }).filter(Boolean) as any[]
-  },[active,datasetType,metricCols])
-
-  // Ranking data
-  const rankingData=useMemo(()=>{
-    if(datasetType!=="school"||!active) return []
-    const rows=filtered
-    const col=rankingMetric
-    return [...rows].map(r=>({ name: cleanValue(r["SCHOOL NAME"]).slice(0,38) || cleanValue(r["SCHOOL ID"]), value: col==="PARTICIPATION RATE"? (toNumber(r[col])??0) : (toNumber(r[col])??0), full: r }))
-      .sort((a,b)=>b.value-a.value).slice(0,10)
-  },[active,datasetType,filtered,rankingMetric])
-
-  // Activity distribution
-  const activityDist=useMemo(()=>{
-    if(datasetType!=="school"||!active) return []
-    const dls=filtered.map(r=>toNumber(r["DOWNLOADS"])??0)
-    const buckets:Record<string,number>={"No Activity":0,"Low Activity":0,"Moderate Activity":0,"High Activity":0}
-    for(const n of dls) buckets[activityBucket(n)]++
-    return Object.entries(buckets).map(([name,value])=>({name,value}))
-  },[active,datasetType,filtered])
-
-  // Data quality
-  const quality=useMemo(()=>{
-    if(!active) return null
-    const total=active.rows.length
-    let complete=0, missing=0, dupCheck=new Set<string>(), dups=0, negatives=0
-    for(const r of active.rows){
-      const isComplete=active.headers.every(h=> cleanValue(r[h])!=="")
-      if(isComplete) complete++
-      const hasMissing=active.headers.some(h=> cleanValue(r[h])==="")
-      if(hasMissing) missing++
-      const key=active.headers.map(h=>cleanValue(r[h])).join("|")
-      if(dupCheck.has(key)) dups++; else dupCheck.add(key)
-      for(const h of metricCols){ const n=toNumber(r[h]); if(n!==null&&n<0) negatives++ }
-    }
-    const invalidPerc = active.headers.filter(h=> columnTypes[h]==="percent").some(h=> active.rows.some(r=>{ const n=toNumber(r[h]); return n!==null && (n<0||n>100)}))
-    return { total, complete, missingRecords: missing, dups, negatives, invalidPerc, status: (dups===0&&missing<total*0.2&&negatives===0)?"READY":"REVIEW" }
-  },[active,columnTypes,metricCols])
-
-  const validationItems=useMemo(()=>{
-    if(!active||!quality) return []
-    return [
-      {label:"All schools included", ok: quality.total>=400, detail:`${quality.total} records`},
-      {label:"Duplicate school records", ok: quality.dups===0, detail: quality.dups? `${quality.dups} duplicates`:"0 duplicates"},
-      {label:"Duplicate users", ok: quality.dups===0, detail: quality.dups? `${quality.dups}`:"none"},
-      {label:"Required fields blank", ok: quality.missingRecords < quality.total*0.5, detail: `${quality.missingRecords} rows with blanks`},
-      {label:"Negative values", ok: quality.negatives===0, detail: quality.negatives? `${quality.negatives} negatives`:"none"},
-      {label:"Percentages valid", ok: !quality.invalidPerc, detail: quality.invalidPerc?"invalid % found":"0–100%"},
-      {label:"Downloads numeric", ok: metricCols.every(h=> active.rows.every(r=> cleanValue(r[h])==="" || toNumber(r[h])!==null)), detail:"checked"},
-      {label:"Totals match source", ok:true, detail: fmt(quality.total)+" records"},
-      {label:"Reporting period set", ok: MONTHS.includes(reportingMonth), detail: `${reportingMonth} ${reportingYear}`},
-    ]
-  },[active,quality,metricCols,reportingMonth,reportingYear])
-
-  // User registration trend monthly
-  const userRegTrend=useMemo(()=>{
-    if(datasetType!=="user"||!userKPIs) return []
-    return userKPIs.byDate.map(([name,value])=>({name,value}))
-  },[datasetType,userKPIs])
-
-  const downloadMax = useMemo(()=> schoolKPIs? schoolKPIs.maxDownloads : 0, [schoolKPIs])
-
-  const trendData = useMemo(()=> snapshotTrend.map(t=>({
-    name: fmtPeriod(t.period),
-    totalDownloads: t.totalDownloads,
-    totalRegistered: t.totalRegistered,
-    totalActual: t.totalActual,
-    participationRate: Number(t.participationRate.toFixed(1)),
-  })),[snapshotTrend])
-  const latestTrend = snapshotTrend[snapshotTrend.length-1] ?? null
-  const previousTrend = snapshotTrend[snapshotTrend.length-2] ?? null
-  const trendMetricLabel = trendMetric==="totalDownloads"?"Downloads":trendMetric==="totalRegistered"?"Registered Users":"Active Users"
-
-  const schoolOptions=useMemo(()=>{
-    if(datasetType!=="school"||!active) return ["All Schools"]
-    const names=[...new Set(active.rows.map(r=>cleanValue(r["SCHOOL NAME"])).filter(Boolean))].sort()
-    return ["All Schools", ...names.slice(0,300)]
-  },[active,datasetType])
-
-  const inReport = REPORT_VIEWS.includes(view)
+  function goDirectory() {
+    setView("directory")
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-700 selection:bg-indigo-200">
       <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:bg-slate-900 focus:text-white focus:rounded-full focus:text-sm focus:font-semibold">Skip to main content</a>
-      <input ref={fileRef} type="file" accept=".xls,.xlsx,.csv" hidden aria-hidden="true" tabIndex={-1} onChange={e=>{const f=e.target.files?.[0]; if(f) void loadFile(f)}}/>
       <div className="lg:flex">
-        <AppSidebar view={view} onNavigate={setView} user={user} onLogout={onLogout}/>
-        <div className="flex-1 min-w-0">
-          <header className="sticky top-0 z-30 backdrop-blur-xl bg-slate-50/95 border-b border-slate-200/70">
-            <div className="max-w-[1440px] mx-auto px-4 sm:px-6 h-[68px] flex items-center justify-between gap-4">
-              <div className="lg:hidden"><Brand/></div>
-              <div className="hidden lg:flex items-center gap-3 min-w-0">
-                <div className="text-sm font-bold text-slate-900">{VIEW_TITLES[view]}</div>
-                {wb && <span className="hidden xl:inline-flex items-center gap-2 text-xs bg-white border border-slate-200 rounded-full px-3 py-1.5 shadow-sm"><span className="size-2 rounded-full bg-emerald-500 animate-pulse"/><span className="font-medium truncate max-w-[220px]">{wb.fileName}</span><span className="text-slate-600">•</span><span>{fmt(filtered.length)} rows</span><span className="text-slate-600">•</span><span className="capitalize">{datasetType}</span></span>}
+        <AppSidebar view={view} onNavigate={navigate} user={user} onLogout={onLogout} />
+        <div className="flex min-h-screen min-w-0 flex-1 flex-col">
+          <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 shadow-[0_8px_30px_-26px_rgba(15,23,42,0.65)] backdrop-blur-xl">
+            <div className="mx-auto flex h-[76px] max-w-[1440px] items-center justify-between gap-4 px-4 sm:px-6">
+              <div className="lg:hidden"><Brand /></div>
+              <div className="hidden min-w-0 items-center gap-3 lg:flex">
+                <div className="h-9 w-1 rounded-full bg-gradient-to-b from-indigo-600 to-violet-500" aria-hidden="true" />
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-black tracking-tight text-slate-950">{VIEW_TITLES[view]}</div>
+                  <div className="truncate text-[11px] text-slate-500">{VIEW_DESCRIPTIONS[view]}</div>
+                </div>
+                {UNAVAILABLE_VIEWS.has(view) && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700"><LockIcon className="size-3" /> Unavailable</span>
+                )}
               </div>
               <div className="flex items-center gap-2">
-                {wb&&inReport&&(
-                  <>
-                    <div className="hidden xl:flex items-center gap-2 text-xs">
-                      <label className="sr-only" htmlFor="reporting-month-header">Reporting month</label>
-                      <select id="reporting-month-header" aria-label="Reporting month" value={reportingMonth} onChange={e=>setReportingMonth(e.target.value)} className="px-2.5 py-2 rounded-full border border-slate-200 bg-white font-medium focus-visible:ring-2 focus-visible:ring-indigo-500">
-                        {MONTHS.map(m=><option key={m} value={m}>{m}</option>)}
-                      </select>
-                      <label className="sr-only" htmlFor="reporting-year-header">Reporting year</label>
-                      <select id="reporting-year-header" aria-label="Reporting year" value={reportingYear} onChange={e=>setReportingYear(e.target.value)} className="px-2.5 py-2 rounded-full border border-slate-200 bg-white font-medium focus-visible:ring-2 focus-visible:ring-indigo-500">
-                        <option>2024</option><option>2025</option><option>2026</option>
-                      </select>
-                    </div>
-                    <button onClick={()=>{setWb(null); setSourceFile(null)}} title="Load another file or open a saved snapshot" className="hidden sm:inline-flex text-sm font-medium px-3.5 py-2 rounded-full border border-slate-200 bg-white hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-indigo-500">Change source</button>
-                    <button onClick={()=>window.print()} className="hidden sm:inline-flex text-sm font-semibold px-4 py-2 rounded-full bg-slate-900 text-white hover:bg-slate-800 shadow focus-visible:ring-2 focus-visible:ring-indigo-500">Print / PDF</button>
-                  </>
-                )}
-                {inReport&&<button onClick={()=>fileRef.current?.click()} className="text-sm font-semibold px-3.5 py-2 rounded-full border border-slate-200 bg-white hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-indigo-500">Load Excel</button>}
-                <button onClick={onLogout} title={`Signed in as ${user}`} className="lg:hidden text-sm font-semibold px-3.5 py-2 rounded-full border border-slate-200 bg-white hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-indigo-500">Sign out</button>
+                <span className="hidden items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-700 xl:inline-flex">
+                  <span className="size-2 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.12)]" />
+                  Workspace ready
+                </span>
+                {view !== "uploads" && <button onClick={goUpload} className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-sm hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 sm:inline-flex"><UploadIcon className="size-4" /> Upload data</button>}
+                <div className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2 py-1.5 sm:flex">
+                  <span className="grid size-7 place-items-center rounded-lg bg-indigo-600 text-[10px] font-black uppercase text-white">{user.slice(0, 2) || "LR"}</span>
+                  <span className="max-w-28 truncate text-xs font-semibold text-slate-700">{user}</span>
+                </div>
+                <button onClick={onLogout} title={`Signed in as ${user}`} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 shadow-sm hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 focus-visible:ring-2 focus-visible:ring-indigo-500">Sign out</button>
               </div>
             </div>
-            {wb && inReport && (
-              <nav aria-label="Report filters" className="max-w-[1440px] mx-auto px-4 sm:px-6 flex flex-wrap items-center gap-2 py-2.5 border-t border-slate-100">
-                <div className="flex items-center gap-2 w-full md:w-auto">
-                  <label htmlFor="school-filter" className="text-xs font-semibold text-slate-600 shrink-0">SCHOOL</label>
-                  <select id="school-filter" aria-label="Filter by school" value={schoolFilter} onChange={e=>setSchoolFilter(e.target.value)} className="flex-1 md:flex-none px-3 py-1.5 rounded-full border border-slate-200 bg-white text-xs font-medium max-w-[220px] focus-visible:ring-2 focus-visible:ring-indigo-500">
-                    {schoolOptions.map(o=><option key={o} value={o}>{o}</option>)}
-                  </select>
-                </div>
-                <div className="flex items-center gap-2 w-full md:w-auto">
-                  <label htmlFor="global-search" className="text-xs font-semibold text-slate-600 shrink-0">SEARCH</label>
-                  <div className="relative flex-1 md:flex-none">
-                    <input id="global-search" type="search" aria-label="Search schools, users or IDs" value={search} onChange={e=>setSearch(e.target.value)} placeholder="School, user, ID…" className="w-full md:w-[200px] pl-7 pr-2 py-1.5 rounded-full border border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none text-xs"/>
-                    <SearchIcon className="pointer-events-none absolute left-2.5 top-1.5 size-4 text-slate-500" />
-                  </div>
-                </div>
-                <div className="ml-auto hidden lg:flex items-center gap-2 text-[11px] text-slate-600">
-                  <span aria-hidden="true" className="size-1.5 rounded-full bg-emerald-500"/>{active?.headers.length} cols • {metricCols.length} metrics • {lastUpdated}
-                </div>
-              </nav>
-            )}
           </header>
-          <MobileNav view={view} onNavigate={setView}/>
+          <MobileNav view={view} onNavigate={navigate} />
 
-      <main id="main-content" className="max-w-[1440px] mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        {view==="overview" && <AdminOverview user={user} onNavigate={setView} onOpenSnapshot={(id)=>void openSnapshot(id)}/>}
-        {view==="uploads" && (
-          <div id="panel-uploads" role="region" aria-label="Uploads and snapshots" tabIndex={0} className="outline-none">
-            <AdminPanel onOpenComparison={()=>setView("comparison")} onBack={()=>setView("overview")} />
-          </div>
-        )}
-        {view==="comparison" && (
-          <div id="panel-comparison" role="region" aria-label="Comparison" tabIndex={0} className="space-y-4 outline-none">
-            <div className="bg-white border border-slate-200 rounded-2xl p-1.5 inline-flex items-center gap-1.5 shadow-sm">
-              {(["school","member"] as const).map(mode=>(
-                <button key={mode} onClick={()=>setComparisonMode(mode)} aria-pressed={comparisonMode===mode} className={`px-4 py-2 rounded-full text-sm font-bold transition focus-visible:ring-2 focus-visible:ring-indigo-500 ${comparisonMode===mode?"bg-slate-900 text-white shadow":"text-slate-600 hover:bg-slate-50"}`}>
-                  {mode==="school"?"School Comparison":"Member Comparison"}
-                </button>
-              ))}
-            </div>
-            {comparisonMode==="school"?<SchoolComparison />:<MemberComparison />}
-          </div>
-        )}
-        {view==="duplicates" && (
-          <div id="panel-duplicates" role="region" aria-label="Duplicate review" tabIndex={0} className="outline-none">
-            <DuplicateReview />
-          </div>
-        )}
-        {view==="find" && (
-          <div id="panel-find" role="region" aria-label="Find a member" tabIndex={0} className="outline-none">
-            <FindMember />
-          </div>
-        )}
-        {view==="email" && (
-          <div id="panel-email" role="region" aria-label="Email validation" tabIndex={0} className="outline-none">
-            <EmailValidation />
-          </div>
-        )}
-        {view==="history" && (
-          <div id="panel-history" role="region" aria-label="Upload history" tabIndex={0} className="outline-none">
-            <UploadHistory />
-          </div>
-        )}
-        {view==="audit" && (
-          <div id="panel-audit" role="region" aria-label="Audit log" tabIndex={0} className="outline-none">
-            <AuditLog />
-          </div>
-        )}
-        {view==="trends" && (
-          <div id="panel-trends" role="region" aria-label="Snapshot trends" tabIndex={0} className="outline-none">
-            <SnapshotHistory sourceFile={sourceFile} module={snapshotModule} reportingPeriod={reportingPeriod} />
-          </div>
-        )}
-        {REPORT_VIEWS.includes(view) && (
-          !wb ? (
-            <div className="space-y-4">
-              <div className="bg-white border border-slate-200 rounded-2xl p-8 sm:p-10 text-center shadow-sm">
-                <h2 className="text-xl font-extrabold text-slate-900">No workbook loaded</h2>
-                <p className="mt-2 text-sm text-slate-600 max-w-md mx-auto">Open a saved snapshot from the database to render the report directly, or load an Excel export.</p>
-                <div className="mt-5 flex flex-wrap justify-center gap-2">
-                  <button onClick={()=>fileRef.current?.click()} className="px-4 py-2.5 rounded-full bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800">Open Excel file</button>
-                  <button onClick={()=>setView("uploads")} className="px-4 py-2.5 rounded-full border border-slate-200 bg-white text-sm font-semibold hover:bg-slate-50">Upload &amp; save snapshot</button>
-                  <button onClick={()=>void loadSample("/samples/sample-utilization.xls","LR Portal Utilization.xls")} className="px-4 py-2.5 rounded-full border border-slate-200 bg-white text-sm font-semibold hover:bg-slate-50">Load school sample</button>
+          <main id="main-content" className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-6 sm:px-6 sm:py-8">
+            {view === "overview" && <WorkspaceOverview user={user} onNavigate={navigate} onOpenSchool={openSchool} />}
+            {view === "uploads" && <ImportPanel onOpenSchool={openSchool} onViewDirectory={goDirectory} />}
+            {view === "directory" && <SchoolDirectory onOpenSchool={openSchool} onGoUpload={goUpload} />}
+            {view === "roster" && (
+              <SchoolUsers
+                schoolId={selectedSchoolId}
+                onChooseSchool={goDirectory}
+                onGoUpload={goUpload}
+                onBack={goDirectory}
+              />
+            )}
+            {UNAVAILABLE_VIEWS.has(view) && (
+              <div className="relative mx-auto max-w-2xl overflow-hidden rounded-[26px] border border-amber-200 bg-gradient-to-br from-white to-amber-50/60 p-8 text-center shadow-[0_18px_50px_-34px_rgba(15,23,42,0.4)] sm:p-12">
+                <div className="pointer-events-none absolute -right-16 -top-16 size-48 rounded-full bg-amber-200/30 blur-3xl" />
+                <div className="relative">
+                  <div className="mx-auto grid size-14 place-items-center rounded-2xl bg-amber-100 text-amber-700 shadow-sm"><AlertIcon className="size-7" /></div>
+                  <div className="mt-4 text-xl font-black tracking-tight text-slate-950">{VIEW_TITLES[view]} is not available yet</div>
+                  <div className="mx-auto mt-2 max-w-lg text-sm leading-relaxed text-slate-600">This module is intentionally paused while the school directory, uploads, and roster workflows are completed and verified.</div>
+                  <div className="mt-6 flex flex-wrap justify-center gap-2">
+                    <button onClick={() => navigate("directory")} className="rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-slate-900/15 hover:bg-indigo-700">Open Schools</button>
+                    <button onClick={() => navigate("uploads")} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-600 shadow-sm hover:border-indigo-200 hover:text-indigo-700">Go to Uploads</button>
+                  </div>
                 </div>
               </div>
-              <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-                <div className="px-5 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-bold text-slate-900">SAVED SNAPSHOTS</div>
-                    <div className="text-xs text-slate-600">Open stored data without re-uploading the original Excel file</div>
-                  </div>
-                  <button onClick={()=>void loadSavedSnapshots()} disabled={savedStatus==="loading"} className="px-3 py-1.5 rounded-full border border-slate-200 bg-white text-xs font-semibold hover:bg-slate-50 disabled:opacity-40">{savedStatus==="loading"?"Loading…":"Refresh"}</button>
-                </div>
-                {savedStatus==="idle"||savedStatus==="loading"?(
-                  <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3 p-4" aria-busy="true" aria-live="polite">
-                    {[1,2,3].map(i=><div key={i} className="h-[104px] rounded-xl bg-slate-100 animate-pulse"/>)}
-                  </div>
-                ):savedStatus==="unavailable"?(
-                  <div className="p-8 text-center text-sm text-slate-600">Snapshot service unavailable. Run the app with <b className="text-slate-800">pnpm preview:worker</b>, then refresh.</div>
-                ):savedSnapshots.length?(
-                  <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3 p-4 max-h-[420px] overflow-auto">
-                    {savedSnapshots.map(snapshot=>(
-                      <button key={snapshot.id} onClick={()=>void openSnapshot(snapshot.id)} className="text-left bg-white border border-slate-200 rounded-xl p-4 hover:border-indigo-300 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-indigo-500">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className={`text-[11px] font-semibold border rounded-full px-2 py-0.5 ${snapshot.module==="school"?"bg-indigo-50 text-indigo-700 border-indigo-200":"bg-sky-50 text-sky-700 border-sky-200"}`}>{snapshot.module==="school"?"School":"Member"}</span>
-                          <span className="text-xs text-slate-500">{fmt(snapshot.record_count)} rows</span>
-                        </div>
-                        <div className="mt-2 text-sm font-bold text-slate-900">{fmtPeriod(snapshot.reporting_period)}</div>
-                        <div className="text-xs text-slate-600 truncate" title={snapshot.original_filename}>{snapshot.original_filename}</div>
-                        <div className="mt-2 text-xs font-semibold text-indigo-600">Open snapshot →</div>
-                      </button>
-                    ))}
-                  </div>
-                ):(
-                  <div className="p-8 text-center text-sm text-slate-600">No saved snapshots yet. <button onClick={()=>setView("uploads")} className="font-semibold text-indigo-600 underline">Upload and save one</button>.</div>
-                )}
-              </div>
-            </div>
-          ) : (
-          <div className="space-y-5">
-            {/* Dashboard Header per spec section 3.1 */}
-            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-              <div className="px-5 sm:px-7 py-5 flex flex-wrap items-end justify-between gap-4">
+            )}
+          </main>
+
+          <footer className="mt-10 border-t border-slate-800 bg-slate-950 text-slate-300">
+            <div className="mx-auto flex max-w-[1440px] flex-col gap-6 px-5 py-8 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-xs font-black text-white shadow-lg shadow-black/20">LR</div>
                 <div>
-                  <div className="text-xs font-bold tracking-[0.18em] uppercase text-indigo-600">Learning Resource Portal</div>
-                  <div className="text-[22px] sm:text-[26px] font-extrabold tracking-tight text-slate-900 leading-none mt-1">MONTHLY VISUAL REPORT</div>
-                  <div className="text-sm font-semibold text-slate-600 mt-2 flex flex-wrap items-center gap-2">
-                    <span className="bg-slate-900 text-white rounded-full px-3 py-1 text-xs">{reportingMonth} {reportingYear}</span>
-                    <span className="text-slate-600">•</span><span className="text-xs font-normal text-slate-600">Last Updated: {lastUpdated}</span>
-                    <span className={`text-xs px-2.5 py-1 rounded-full border font-semibold ${datasetType==="school"?"bg-emerald-50 text-emerald-700 border-emerald-200":datasetType==="user"?"bg-indigo-50 text-indigo-700 border-indigo-200":"bg-slate-50 text-slate-600 border-slate-200"}`}>{datasetType==="school"?"School Utilization":datasetType==="user"?"User Records":"Generic"} • {active?.headers.length} fields</span>
-                  </div>
-                </div>
-                <div className="hidden md:flex items-center gap-2">
-                  <div className="text-right">
-                    <div className="text-[11px] font-bold tracking-widest uppercase text-slate-600">Reporting Period</div>
-                    <div className="flex gap-1.5 mt-1">
-                      <label className="sr-only" htmlFor="reporting-month-card">Reporting month</label>
-                      <select id="reporting-month-card" aria-label="Reporting month" value={reportingMonth} onChange={e=>setReportingMonth(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-indigo-500">{MONTHS.map(m=><option key={m}>{m}</option>)}</select>
-                      <label className="sr-only" htmlFor="reporting-year-card">Reporting year</label>
-                      <select id="reporting-year-card" aria-label="Reporting year" value={reportingYear} onChange={e=>setReportingYear(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-indigo-500"><option>2024</option><option>2025</option><option>2026</option></select>
-                    </div>
-                  </div>
+                  <div className="text-sm font-bold text-white">LR Portal Monitoring System</div>
+                  <p className="mt-1 max-w-xl text-xs leading-relaxed text-slate-400">Transforming school roster and utilization records into reliable information for better monitoring and timely decisions.</p>
                 </div>
               </div>
-              <div className="px-5 sm:px-7 pb-4 flex flex-wrap gap-2 text-xs">
-                <span className="bg-slate-50 border border-slate-200 rounded-full px-3 py-1.5">Filters: <b>Month</b> {reportingMonth} • <b>School</b> {schoolFilter} • <b>Metric</b> {rankingMetric}</span>
-                <span className="bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-full px-3 py-1.5 hidden sm:inline">Search filters every chart + table • Print hides controls</span>
+              <div className="flex flex-col gap-3 lg:items-end">
+                <div className="text-[11px] text-slate-400">Designed and developed by <span className="font-semibold text-slate-200">Broadmaker</span></div>
+                <div className="flex flex-wrap gap-2">
+                  <a href="https://github.com/Broadmaker" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 hover:border-indigo-400/50 hover:bg-white/10 hover:text-white"><GithubIcon className="size-4" /> GitHub profile</a>
+                  <a href="https://broadmaker.github.io/porfolio/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 hover:border-indigo-400/50 hover:bg-white/10 hover:text-white">Portfolio <ExternalLinkIcon className="size-3.5" /></a>
+                </div>
               </div>
             </div>
-
-            {view==="dashboard" && (
-              <div id="panel-dashboard" role="region" aria-label="Report dashboard" tabIndex={0} className="space-y-4 outline-none">
-                {loading && <div aria-busy="true" aria-live="polite" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">{[1,2,3,4,5].map(i=><div key={i} className="bg-white border border-slate-200 rounded-2xl p-4 animate-pulse"><div className="h-3 w-20 bg-slate-200 rounded-full"/><div className="h-8 w-24 bg-slate-200 rounded mt-3"/><div className="h-3 w-32 bg-slate-100 rounded mt-2"/></div>)}</div>}
-                {isSearchPending && !loading && <div role="status" aria-live="polite" className="text-xs text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-full px-3 py-1.5 inline-flex items-center gap-2"><span className="size-2 rounded-full bg-indigo-600 animate-pulse"/>Searching…</div>}
-                {/* KPI row as per spec section 4 + change indicators */}
-                {!loading && datasetType==="school" && schoolKPIs && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-                    {[
-                      {label:"Total Schools", value:fmt(schoolKPIs.totalSchools), sub: schoolFilter!=="All Schools"? `filtered of ${fmt(schoolKPIs.overall.totalSchools)}`:`all schools`, delta: schoolFilter!=="All Schools"?"filtered view":"current file", color:"from-indigo-600 to-blue-500"},
-                      {label:"Registered Users", value:fmt(schoolKPIs.totalRegistered), sub:`active ${fmt(schoolKPIs.totalActual)} • avg ${fmt(Math.round(schoolKPIs.totalRegistered/schoolKPIs.totalSchools))}/school`, delta:"current file", color:"from-sky-500 to-cyan-500"},
-                      {label:"Active / Actual Users", value:fmt(schoolKPIs.totalActual), sub:`${schoolKPIs.totalRegistered? ((schoolKPIs.totalActual/schoolKPIs.totalRegistered*100).toFixed(1)):"0"}% of registered`, delta: schoolKPIs.totalActual===0?"0 — check data":`${fmt(schoolKPIs.activeSchools)} active schools`, color:"from-emerald-500 to-teal-500"},
-                      {label:"Participation Rate", value: schoolKPIs.avgParticipation.toFixed(1)+"%", sub: schoolKPIs.avgParticipation===0?"0% — all 0% in file":`overall participation`, delta:"current file", color:"from-amber-500 to-orange-500"},
-                      {label:"Total Downloads", value:fmtCompact(schoolKPIs.totalDownloads), sub:`avg ${fmt(Math.round(schoolKPIs.avgDownloads))} • max ${fmtCompact(schoolKPIs.maxDownloads)}`, delta:"current file", color:"from-fuchsia-600 to-pink-500"},
-                    ].map(k=>(
-                      <div key={k.label} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition min-w-0">
-                        <div className="text-[11px] font-bold tracking-[0.14em] uppercase text-slate-600 truncate">{k.label}</div>
-                        <div className="text-[24px] font-extrabold tracking-tight text-slate-900 leading-none mt-2 truncate">{k.value}</div>
-                        <div className="text-xs text-slate-600 mt-1 truncate">{k.sub}</div>
-                        <div className={`mt-2 inline-flex text-[11px] font-bold rounded-full px-2.5 py-1 bg-gradient-to-br ${k.color} text-white shadow max-w-full truncate`}>{k.delta}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {!loading && datasetType==="user" && userKPIs && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-                    {[
-                      {label:"Total Users", value:fmt(userKPIs.totalUsers), sub:`${fmt(userKPIs.newUsers)} new in ${reportingMonth}`, delta:`${userKPIs.byRole[0]?.[0]??"—"} dominant`},
-                      {label:"Active Users", value:fmt(userKPIs.activeUsers), sub:`${userKPIs.inactiveUsers} inactive • ${(userKPIs.activeUsers/userKPIs.totalUsers*100).toFixed(0)}% active`, delta:userKPIs.activeUsers===userKPIs.totalUsers?"all active":`${userKPIs.activeUsers} active`},
-                      {label:"Inactive Users", value:fmt(userKPIs.inactiveUsers), sub:`${(userKPIs.inactiveUsers/userKPIs.totalUsers*100).toFixed(0)}% of total`, delta:"review if high"},
-                      {label:"Users by Role", value:String(userKPIs.byRole.length), sub:userKPIs.byRole.slice(0,2).map(([n,c])=>`${n}:${c}`).join(" • "), delta: userKPIs.byGender.slice(0,2).map(([n,c])=>`${n} ${c}`).join(" • ")},
-                      {label:"Total Downloads", value:fmt(userKPIs.totalDownloads), sub:`avg ${(userKPIs.totalDownloads/userKPIs.totalUsers).toFixed(1)}/user`, delta:`max ${Math.max(...filtered.map(r=>toNumber(r["TOTAL DOWNLOADS"])??0))}`},
-                    ].map(k=>(
-                      <div key={k.label} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
-                        <div className="text-[11px] font-bold tracking-widest uppercase text-slate-600">{k.label}</div>
-                        <div className="text-[24px] font-extrabold text-slate-900 mt-2">{k.value}</div>
-                        <div className="text-xs text-slate-600 mt-1 truncate">{k.sub}</div>
-                        <div className="mt-2 text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full px-2 py-1 inline-flex truncate max-w-full">{k.delta}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {!loading && datasetType==="generic" && (
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                    <div className="bg-white border border-slate-200 rounded-2xl p-4"><div className="text-[11px] font-bold tracking-widest uppercase text-slate-600">Rows</div><div className="text-2xl font-extrabold mt-1">{fmt(filtered.length)}</div><div className="text-xs text-slate-600">of {fmt(active?.rows.length??0)} total</div></div>
-                    {genericSummary.map(s=>(
-                      <div key={s.col} className="bg-white border border-slate-200 rounded-2xl p-4"><div className="text-[11px] font-bold tracking-widest uppercase text-slate-600">{s.col}</div><div className="text-xl font-extrabold mt-1">{fmtCompact(Math.round(s.sum))}</div><div className="text-xs text-slate-600">avg {fmt(Math.round(s.avg))} • max {fmt(s.max)}</div></div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Historical trend from persisted school snapshots */}
-                <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-                  <div className="px-5 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-bold text-slate-900">HISTORICAL TREND</div>
-                      <div className="text-xs text-slate-600">{snapshotStatus==="unavailable" ? "Snapshot service unavailable — save snapshots from Uploads & Snapshots" : snapshotTrend.length ? `${snapshotTrend.length} saved reporting period${snapshotTrend.length===1?"":"s"} • school snapshots` : "Save school snapshots to unlock the monthly trend"}</div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <label className="sr-only" htmlFor="trend-metric">Trend metric</label>
-                      <select id="trend-metric" value={trendMetric} onChange={e=>setTrendMetric(e.target.value as TrendMetric)} className="px-2.5 py-1.5 rounded-full border border-slate-200 bg-slate-50 text-xs font-semibold focus-visible:ring-2 focus-visible:ring-indigo-500">
-                        <option value="totalDownloads">Downloads</option>
-                        <option value="totalRegistered">Registered Users</option>
-                        <option value="totalActual">Active Users</option>
-                      </select>
-                      <button onClick={()=>void loadSnapshotTrends()} disabled={snapshotStatus==="loading"} className="px-3 py-1.5 rounded-full border border-slate-200 bg-white text-xs font-semibold hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">{snapshotStatus==="loading"?"Loading…":"Refresh"}</button>
-                    </div>
-                  </div>
-                  {snapshotStatus==="loading" ? (
-                    <div className="h-[260px] grid place-items-center" aria-busy="true" aria-live="polite"><div className="w-3/4 h-32 bg-slate-100 rounded-2xl animate-pulse"/></div>
-                  ) : snapshotTrend.length ? (
-                    <>
-                      <div className="h-[260px] p-3">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart data={trendData} margin={{left:4,right:8,top:8,bottom:0}}>
-                            <defs><linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#4f46e5" stopOpacity={0.35}/><stop offset="100%" stopColor="#4f46e5" stopOpacity={0.02}/></linearGradient></defs>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
-                            <XAxis dataKey="name" tick={{fontSize:11}}/>
-                            <YAxis tick={{fontSize:11}} tickFormatter={(v:number)=>fmtCompact(v)} width={56}/>
-                            <Tooltip content={<Tip/>}/>
-                            <Area type="monotone" dataKey={trendMetric} name={trendMetricLabel} stroke="#4f46e5" strokeWidth={2.5} fill="url(#trendFill)" dot={{r:3}}/>
-                          </AreaChart>
-                        </ResponsiveContainer>
-                      </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 px-5 pb-4 text-xs">
-                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5"><div className="text-slate-600">Latest</div><div className="font-bold text-slate-900 text-base">{latestTrend? fmtPeriod(latestTrend.period):"—"}</div><div className="text-slate-600 mt-0.5">{previousTrend? `vs ${fmtPeriod(previousTrend.period)}`:""}</div></div>
-                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5"><div className="text-slate-600">Downloads</div><div className="font-bold text-slate-900 text-base">{latestTrend? fmtCompact(latestTrend.totalDownloads):"—"}</div>{(()=>{ const change=latestTrend&&previousTrend? pctChange(latestTrend.totalDownloads,previousTrend.totalDownloads):null; return change===null? null:<div className={`mt-0.5 font-semibold ${change>0?"text-emerald-700":change<0?"text-red-700":"text-slate-600"}`}>{change>0?"+":""}{change.toFixed(1)}% vs prev</div> })()}</div>
-                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5"><div className="text-slate-600">Registered</div><div className="font-bold text-slate-900 text-base">{latestTrend? fmt(latestTrend.totalRegistered):"—"}</div>{(()=>{ const change=latestTrend&&previousTrend? pctChange(latestTrend.totalRegistered,previousTrend.totalRegistered):null; return change===null? null:<div className={`mt-0.5 font-semibold ${change>0?"text-emerald-700":change<0?"text-red-700":"text-slate-600"}`}>{change>0?"+":""}{change.toFixed(1)}% vs prev</div> })()}</div>
-                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5"><div className="text-slate-600">Participation</div><div className="font-bold text-slate-900 text-base">{latestTrend? latestTrend.participationRate.toFixed(1)+"%":"—"}</div>{latestTrend&&previousTrend?<div className={`mt-0.5 font-semibold ${latestTrend.participationRate>previousTrend.participationRate?"text-emerald-700":latestTrend.participationRate<previousTrend.participationRate?"text-red-700":"text-slate-600"}`}>{latestTrend.participationRate>previousTrend.participationRate?"+":""}{(latestTrend.participationRate-previousTrend.participationRate).toFixed(1)} pp</div>:null}</div>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="p-8 text-center">
-                      <div className="text-sm font-semibold text-slate-800">{snapshotStatus==="unavailable" ? "Snapshot service is not reachable" : "No saved snapshots yet"}</div>
-                      <div className="text-xs text-slate-600 mt-1 max-w-md mx-auto">{snapshotStatus==="unavailable" ? "Run the app with the Cloudflare Pages worker (pnpm preview:worker) to reach the snapshot API." : "This upload is treated as the current baseline. Upload &amp; save snapshot, validate a school export, and save it as a snapshot to start the trend."}</div>
-                      <button onClick={()=>setView("uploads")} className="mt-3 px-4 py-2 rounded-full bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800">Upload &amp; save snapshot</button>
-                    </div>
-                  )}
-                </div>
-
-                <div className="grid lg:grid-cols-2 gap-4">
-                  {/* Top 10 Ranking per spec 8-9 */}
-                  <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-                    <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-3">
-                      <div><div className="text-sm font-bold text-slate-900">TOP 10 SCHOOLS</div><div className="text-xs text-slate-600">Ranking updates automatically • Top vs Bottom vs Distribution</div></div>
-                      <select value={rankingMetric} onChange={e=>setRankingMetric(e.target.value as any)} className="px-2.5 py-1.5 rounded-full border border-slate-200 bg-slate-50 text-xs font-semibold">
-                        <option value="DOWNLOADS">Downloads</option><option value="REGISTERED USERS">Registered Users</option><option value="ACTUAL USERS">Active Users</option><option value="PARTICIPATION RATE">Participation</option>
-                      </select>
-                    </div>
-                    <div className="divide-y divide-slate-100">
-                      {rankingData.length? rankingData.map((r,i)=>(
-                        <div key={r.name} className="flex items-center gap-3 px-5 py-2.5 hover:bg-slate-50">
-                          <span className={`size-7 rounded-full grid place-items-center text-xs font-bold ${i<3?"bg-indigo-600 text-white":"bg-slate-100 text-slate-600"}`}>{i+1}</span>
-                          <span className="flex-1 text-sm font-medium text-slate-800 truncate" title={r.name}>{r.name}</span>
-                          <div className="flex items-center gap-2">
-                            <div className="hidden sm:block w-24 h-2 bg-slate-100 rounded-full overflow-hidden">
-                              <div className="h-full bg-indigo-600 rounded-full" style={{width: `${Math.max(6, (r.value/(rankingData[0]?.value||1))*100)}%`}}/>
-                            </div>
-                            <span className="font-mono text-sm font-bold text-slate-900 min-w-[60px] text-right">{rankingMetric==="PARTICIPATION RATE"? r.value.toFixed(0)+"%": fmt(r.value)}</span>
-                          </div>
-                        </div>
-                      )): <div className="p-8 text-center text-sm text-slate-600">No school data — load Utilization file</div>}
-                    </div>
-                    <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 text-xs text-slate-600">RANK BY: <b className="text-slate-700">{rankingMetric}</b> • switch metric to answer different questions without duplicating dashboard</div>
-                  </div>
-
-                  {/* School Activity Distribution per spec 10 + School Summary per spec 7.1 */}
-                  <div className="space-y-4">
-                    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-                      <div className="px-5 py-4 border-b border-slate-200"><div className="text-sm font-bold text-slate-900">SCHOOL ACTIVITY DISTRIBUTION</div><div className="text-xs text-slate-600">Thresholds — No:0 • Low:1–20 • Moderate:21–100 • High:101+ downloads</div></div>
-                      <div className="h-[200px] p-3">
-                        {activityDist.length?(
-                          <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={activityDist}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f4"/>
-                              <XAxis dataKey="name" tick={{fontSize:10}} interval={0} angle={-12} dy={8} height={50}/>
-                              <YAxis tick={{fontSize:11}} allowDecimals={false}/>
-                              <Tooltip content={<Tip/>}/>
-                              <Bar dataKey="value" radius={[8,8,0,0]}>
-                                {activityDist.map((_,i)=> <Cell key={i} fill={["#e7e5e4","#fde68a","#fb923c","#16a34a"][i]??COLORS[i]}/>)}
-                              </Bar>
-                            </BarChart>
-                          </ResponsiveContainer>
-                        ): <div className="p-8 text-center text-slate-600 text-sm">No distribution</div>}
-                      </div>
-                      {schoolKPIs && (
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 px-5 pb-4 text-xs">
-                          <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-center"><div className="font-bold text-slate-900">{fmt(schoolKPIs.totalSchools)}</div><div className="text-slate-600">Total Schools</div></div>
-                          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 text-center"><div className="font-bold text-emerald-700">{fmt(schoolKPIs.activeSchools)}</div><div className="text-emerald-600">Active ( &gt;0 dl)</div></div>
-                          <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-center"><div className="font-bold text-slate-900">{fmt(schoolKPIs.inactiveSchools)}</div><div className="text-slate-600">Inactive (0 dl)</div></div>
-                          <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-2.5 text-center"><div className="font-bold text-indigo-700">{fmt(Math.round(schoolKPIs.avgDownloads))}</div><div className="text-indigo-600">Avg / school</div></div>
-                        </div>
-                      )}
-                    </div>
-                    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-                      <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
-                        <div className="text-sm font-bold text-slate-900">SCHOOL SUMMARY</div>
-                        <span className="text-xs bg-slate-900 text-white rounded-full px-2 py-1">{schoolKPIs? `Highest ${fmtCompact(schoolKPIs.maxDownloads)} • Lowest ${fmt(schoolKPIs.minDownloads)}` : ""}</span>
-                      </div>
-                      <div className="p-3 grid grid-cols-2 gap-2 text-xs">
-                        <div className="rounded-xl bg-slate-50 border border-slate-200 p-3"><div className="text-slate-600">Total Schools</div><div className="font-bold text-slate-900 text-base">{schoolKPIs? fmt(schoolKPIs.totalSchools):"—"}</div></div>
-                        <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3"><div className="text-emerald-600">Active Schools</div><div className="font-bold text-emerald-700 text-base">{schoolKPIs? fmt(schoolKPIs.activeSchools):"—"}</div></div>
-                        <div className="rounded-xl bg-slate-50 border border-slate-200 p-3"><div className="text-slate-600">Inactive Schools</div><div className="font-bold text-slate-900 text-base">{schoolKPIs? fmt(schoolKPIs.inactiveSchools):"—"}</div></div>
-                        <div className="rounded-xl bg-indigo-50 border border-indigo-200 p-3"><div className="text-indigo-600">Average Downloads</div><div className="font-bold text-indigo-700 text-base">{schoolKPIs? fmt(Math.round(schoolKPIs.avgDownloads)):"—"}</div></div>
-                      </div>
-                      <div className="px-5 pb-3 text-[11px] text-slate-600">Active = Downloads &gt; 0 • thresholds documented above</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Snapshot comparison from the latest two saved school snapshots */}
-                <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-                  <div className="px-5 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
-                    <div><div className="text-sm font-bold text-slate-900">SNAPSHOT COMPARISON</div><div className="text-xs text-slate-600">Latest two saved school snapshots • matched by School ID</div></div>
-                    {snapshotComparison ? (
-                      <button onClick={()=>setView("comparison")} className="px-3 py-1.5 rounded-full bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700">Open full comparison</button>
-                    ) : (
-                      <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-3 py-1">Not available</span>
-                    )}
-                  </div>
-                  {snapshotComparison ? (
-                    <div className="p-4 space-y-3">
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
-                        <span className="bg-slate-900 text-white rounded-full px-3 py-1 font-semibold">{fmtPeriod(snapshotComparison.previousPeriod)}</span>
-                        <span aria-hidden="true">→</span>
-                        <span className="bg-indigo-600 text-white rounded-full px-3 py-1 font-semibold">{fmtPeriod(snapshotComparison.currentPeriod)}</span>
-                        <span className="text-slate-600">•</span>
-                        <span>Downloads <b className="text-slate-900">{fmt(snapshotComparison.previousDownloads)}</b> → <b className="text-slate-900">{fmt(snapshotComparison.totalDownloads)}</b>{(()=>{ const change=pctChange(snapshotComparison.totalDownloads,snapshotComparison.previousDownloads); return change===null? null:<span className={`ml-1 font-semibold ${change>0?"text-emerald-700":change<0?"text-red-700":"text-slate-600"}`}>{change>0?"+":""}{change.toFixed(1)}%</span> })()}</span>
-                      </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 text-xs">
-                        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 text-center"><div className="text-emerald-600">Increased</div><div className="text-lg font-extrabold text-emerald-700">{snapshotComparison.increased}</div></div>
-                        <div className="bg-red-50 border border-red-200 rounded-xl p-2.5 text-center"><div className="text-red-600">Decreased</div><div className="text-lg font-extrabold text-red-700">{snapshotComparison.decreased}</div></div>
-                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-center"><div className="text-slate-600">No change</div><div className="text-lg font-extrabold text-slate-900">{snapshotComparison.noChange}</div></div>
-                        <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-2.5 text-center"><div className="text-indigo-600">New</div><div className="text-lg font-extrabold text-indigo-700">{snapshotComparison.newSchools}</div></div>
-                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-2.5 text-center"><div className="text-amber-600">Missing</div><div className="text-lg font-extrabold text-amber-700">{snapshotComparison.missingSchools}</div></div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="p-8 text-center">
-                      <div className="text-sm font-semibold text-slate-800">{snapshotStatus==="unavailable" ? "Snapshot service is not reachable" : "Two saved school snapshots are required"}</div>
-                      <div className="text-xs text-slate-600 mt-1 max-w-md mx-auto">{snapshotStatus==="unavailable" ? "Run the app with the Cloudflare Pages worker (pnpm preview:worker) to load saved comparisons." : "Save another school export as a snapshot in Uploads & Snapshots to enable increased, decreased, new, and missing comparisons."}</div>
-                      <button onClick={()=>setView("uploads")} className="mt-3 px-4 py-2 rounded-full bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800">Upload &amp; save snapshot</button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Filters summary footer per spec 26 */}
-                <div className="grid md:grid-cols-3 gap-3">
-                  <div className="bg-white border border-slate-200 rounded-2xl p-4"><div className="text-sm font-bold text-slate-900">Filters Active</div><div className="text-xs text-slate-600 mt-1">Month: <b className="text-slate-700">{reportingMonth} {reportingYear}</b> • School: <b className="text-slate-700">{schoolFilter}</b> • Metric: <b className="text-slate-700">{rankingMetric}</b> — school metrics reflect the current file; the month applies to registration-based figures.</div></div>
-                  <div className="bg-white border border-slate-200 rounded-2xl p-4"><div className="text-sm font-bold text-slate-900">Data → Information → Insight</div><div className="text-xs text-slate-600 mt-1">What is status? What changed? Which schools most active? Which need attention? Why? Then drill to detail.</div></div>
-                  <div className="bg-white border border-slate-200 rounded-2xl p-4"><div className="text-sm font-bold text-slate-900">Update Procedure</div><div className="text-xs text-slate-600 mt-1">1. Import the latest export • 2. Confirm the reporting period • 3. Review validation • 4. Open the Dashboard • 5. Export or present.</div></div>
-                </div>
-              </div>
-            )}
-
-            {view==="school" && (
-              <div id="panel-school" role="region" aria-label="School analysis" tabIndex={0} className="space-y-4 outline-none">
-                <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-wrap items-center gap-3">
-                  <span className="text-xs font-bold tracking-widest uppercase text-slate-600">School Analysis</span>
-                  <label className="sr-only" htmlFor="ranking-metric-school">Ranking metric</label>
-                  <select id="ranking-metric-school" aria-label="Ranking metric" value={rankingMetric} onChange={e=>setRankingMetric(e.target.value as any)} className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-medium focus-visible:ring-2 focus-visible:ring-indigo-500">
-                    <option value="DOWNLOADS">Rank by Downloads</option><option value="REGISTERED USERS">Rank by Registered</option><option value="ACTUAL USERS">Rank by Active</option><option value="PARTICIPATION RATE">Rank by Participation</option>
-                  </select>
-                  <label className="sr-only" htmlFor="school-filter-2">Filter by school</label>
-                  <select id="school-filter-2" aria-label="Filter by school" value={schoolFilter} onChange={e=>setSchoolFilter(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm max-w-[240px] focus-visible:ring-2 focus-visible:ring-indigo-500">
-                    {schoolOptions.map(o=><option key={o}>{o}</option>)}
-                  </select>
-                  <span className="ml-auto text-xs text-slate-600">{rankingData.length} ranked • {activityDist.reduce((a,b)=>a+b.value,0)} schools in scope</span>
-                </div>
-                <div className="grid lg:grid-cols-[1.1fr_0.9fr] gap-4">
-                  <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-                    <div className="px-5 py-4 border-b border-slate-200"><div className="text-sm font-bold text-slate-900">School Ranking — Top 10 by {rankingMetric}</div><div className="text-xs text-slate-600">Conditional formatting • bars grow with value</div></div>
-                    <div className="h-[420px] p-2">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={[...rankingData].reverse()} layout="vertical" margin={{left:10,right:20}}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f4" horizontal={false}/>
-                          <XAxis type="number" tick={{fontSize:11}} tickFormatter={fmtCompact}/>
-                          <YAxis dataKey="name" type="category" width={140} tick={{fontSize:11, width:130}} tickFormatter={(v:string)=> v.length>22 ? v.slice(0,22)+'…' : v}/>
-                          <Tooltip content={<Tip/>}/>
-                          <Bar dataKey="value" fill="#7c3aed" radius={[0,8,8,0]}/>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-                  <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-                    <div className="px-5 py-4 border-b border-slate-200"><div className="text-sm font-bold text-slate-900">School Activity Distribution</div><div className="text-xs text-slate-600">High / Moderate / Low / No — documented thresholds</div></div>
-                    <div className="h-[260px] p-3">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={activityDist}><CartesianGrid strokeDasharray="3 3" stroke="#f5f5f4"/><XAxis dataKey="name" tick={{fontSize:10}} interval={0} angle={-10} dy={8} height={48}/><YAxis tick={{fontSize:11}} allowDecimals={false}/><Tooltip content={<Tip/>}/><Bar dataKey="value" radius={[8,8,0,0]}>{activityDist.map((_,i)=><Cell key={i} fill={["#e7e5e4","#fde68a","#fb923c","#16a34a"][i]}/> )}</Bar></BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                    <div className="px-5 pb-4">
-                      <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 text-xs leading-5">
-                        <div className="font-bold text-slate-900">Definitions</div>
-                        <div className="text-slate-600 mt-1 space-y-1">
-                          <div><span className="inline-block size-2 rounded-full bg-emerald-500 mr-1"/> High: &gt;100 downloads</div>
-                          <div><span className="inline-block size-2 rounded-full bg-orange-400 mr-1"/> Moderate: 21–100</div>
-                          <div><span className="inline-block size-2 rounded-full bg-amber-300 mr-1"/> Low: 1–20</div>
-                          <div><span className="inline-block size-2 rounded-full bg-slate-300 mr-1"/> No: 0</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-                  <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
-                    <div><div className="text-sm font-bold text-slate-900">School Detail Table — with data bars & participation scale</div><div className="text-xs text-slate-600">Click headers to sort • visual indicators make large differences immediate</div></div>
-                    <span className="text-xs bg-slate-50 border border-slate-200 rounded-full px-3 py-1">{filtered.length} rows</span>
-                  </div>
-                  <div tabIndex={0} role="region" aria-label="School detail table, scroll to see more columns" className="overflow-auto max-h-[560px] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset outline-none">
-                    <table className="w-full text-sm">
-                      <thead className="sticky top-0 bg-slate-50 border-b border-slate-200">
-                        <tr>{displayedHeaders.map(h=>(
-                          <th key={h} scope="col" tabIndex={0} role="button" aria-sort={sortKey===h ? (sortDir==="asc" ? "ascending" : "descending") : "none"} aria-label={`${h}, sortable`} onClick={()=>{ if(sortKey===h) setSortDir(d=>d==="asc"?"desc":"asc"); else {setSortKey(h); setSortDir("asc")}}} onKeyDown={e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); if(sortKey===h) setSortDir(d=>d==="asc"?"desc":"asc"); else {setSortKey(h); setSortDir("asc")} } }} className="text-left px-3 py-2.5 font-semibold cursor-pointer whitespace-nowrap hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 outline-none">{h} <span aria-hidden="true">{sortKey===h&&(sortDir==="asc"?"▲":"▼")}</span></th>
-                        ))}</tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {paged.map((r,i)=>(
-                          <tr key={i} className="hover:bg-slate-50">
-                            {displayedHeaders.map(h=>{
-                              const v=cleanValue(r[h]); const n=toNumber(v)
-                              if(h==="DOWNLOADS" && n!==null){
-                                const pct=downloadMax? (n/downloadMax*100):0
-                                return <td key={h} className="px-3 py-2 whitespace-nowrap"><div className="flex items-center gap-2"><div className="w-20 h-2 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-indigo-600 rounded-full" style={{width:`${pct}%`}}/></div><span className="font-mono text-xs font-medium">{fmt(n)}</span></div></td>
-                              }
-                              if(h==="PARTICIPATION RATE"){
-                                const num=toNumber(v)??0; let bg="bg-slate-100 text-slate-600 border-slate-200"; if(num===0) bg="bg-red-50 text-red-700 border-red-200"; else if(num<30) bg="bg-amber-50 text-amber-700 border-amber-200"; else if(num<70) bg="bg-yellow-50 text-yellow-700 border-yellow-200"; else bg="bg-emerald-50 text-emerald-700 border-emerald-200";
-                                return <td key={h} className="px-3 py-2 whitespace-nowrap"><span className={`inline-flex px-2 py-0.5 rounded-full border text-xs font-semibold ${bg}`}>{v||"0%"}</span></td>
-                              }
-                              if(h==="SCHOOL NAME") return <td key={h} className="px-3 py-2 max-w-[280px] truncate font-medium text-slate-800" title={v}>{v}</td>
-                              return <td key={h} className="px-3 py-2 whitespace-nowrap max-w-[260px] truncate">{v||<span className="text-slate-300">—</span>}</td>
-                            })}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="px-4 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs">
-                    <span className="text-slate-600">Showing {(page-1)*pageSize+1}–{Math.min(page*pageSize,filtered.length)} of {fmt(filtered.length)}</span>
-                    <div className="flex gap-2"><button disabled={page<=1} onClick={()=>setPage(p=>p-1)} className="px-3 py-1 rounded-full border bg-white disabled:opacity-40">‹ Prev</button><span className="px-3 py-1 rounded-full bg-white border">Page {page}/{totalPages}</span><button disabled={page>=totalPages} onClick={()=>setPage(p=>p+1)} className="px-3 py-1 rounded-full border bg-white disabled:opacity-40">Next ›</button></div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {view==="users" && (
-              <div id="panel-users" role="region" aria-label="User analysis" tabIndex={0} className="space-y-4 outline-none">
-                {userKPIs?(
-                  <>
-                    <div className="grid lg:grid-cols-3 gap-4">
-                      <div className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-                        <div className="px-5 py-4 border-b border-slate-200"><div className="text-sm font-bold text-slate-900">Users by Role</div><div className="text-xs text-slate-600">Distribution • keep off dashboard unless needed</div></div>
-                        <div className="h-[280px] p-3">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={userKPIs.byRole.map(([name,value])=>({name,value}))}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f4"/>
-                              <XAxis dataKey="name" tick={{fontSize:11}} interval={0} angle={-12} dy={8} height={50}/>
-                              <YAxis tick={{fontSize:11}} allowDecimals={false}/>
-                              <Tooltip content={<Tip/>}/>
-                              <Bar dataKey="value" fill="#7c3aed" radius={[8,8,0,0]}/>
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </div>
-                      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-                        <div className="px-5 py-4 border-b border-slate-200"><div className="text-sm font-bold text-slate-900">Users by Gender</div><div className="text-xs text-slate-600">If applicable & appropriate</div></div>
-                        <div className="h-[280px] p-3">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <PieChart><Pie data={userKPIs.byGender.map(([name,value])=>({name,value}))} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={3} label={({name,percent}:any)=>`${name} ${((percent??0)*100).toFixed(0)}%`}>{userKPIs.byGender.map((_:any,i:number)=><Cell key={i} fill={COLORS[i%COLORS.length]}/>)}</Pie><Tooltip content={<Tip/>}/></PieChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-                      <div className="px-5 py-4 border-b border-slate-200"><div className="text-sm font-bold text-slate-900">New User Registrations — by month</div><div className="text-xs text-slate-600">Registration trend for long-term analysis</div></div>
-                      <div className="h-[260px] p-3">
-                        {userRegTrend.length?(
-                          <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={userRegTrend}><CartesianGrid strokeDasharray="3 3" stroke="#f5f5f4"/><XAxis dataKey="name" tick={{fontSize:11}}/><YAxis tick={{fontSize:11}} allowDecimals={false}/><Tooltip content={<Tip/>}/><Area type="monotone" dataKey="value" stroke="#10b981" fill="#dcfce7" strokeWidth={2}/></AreaChart>
-                          </ResponsiveContainer>
-                        ):<div className="h-full grid place-items-center text-sm text-slate-600">No date data</div>}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                      <div className="bg-white border border-slate-200 rounded-2xl p-4 text-center"><div className="text-xs text-slate-600">Total Users</div><div className="text-xl font-extrabold">{fmt(userKPIs.totalUsers)}</div></div>
-                      <div className="bg-white border border-slate-200 rounded-2xl p-4 text-center"><div className="text-xs text-slate-600">New in {reportingMonth}</div><div className="text-xl font-extrabold text-indigo-600">{fmt(userKPIs.newUsers)}</div></div>
-                      <div className="bg-white border border-slate-200 rounded-2xl p-4 text-center"><div className="text-xs text-slate-600">Roles</div><div className="text-xl font-extrabold">{userKPIs.byRole.length}</div></div>
-                      <div className="bg-white border border-slate-200 rounded-2xl p-4 text-center"><div className="text-xs text-slate-600">Avg downloads / user</div><div className="text-xl font-extrabold">{(userKPIs.totalDownloads/userKPIs.totalUsers).toFixed(1)}</div></div>
-                    </div>
-                    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-                      <div className="px-5 py-4 border-b border-slate-200"><div className="text-sm font-bold text-slate-900">User Detail Table</div><div className="text-xs text-slate-600">Retain user records • search by name, email, ID</div></div>
-                      <div className="overflow-auto max-h-[520px]">
-                        <table className="w-full text-sm"><thead className="sticky top-0 bg-slate-50 border-b"><tr>{displayedHeaders.map(h=>(
-                          <th key={h} onClick={()=>{ if(sortKey===h) setSortDir(d=>d==="asc"?"desc":"asc"); else {setSortKey(h); setSortDir("asc")}}} className="text-left px-3 py-2.5 font-semibold cursor-pointer whitespace-nowrap hover:bg-slate-100">{h} {sortKey===h&&(sortDir==="asc"?"▲":"▼")}</th>
-                        ))}</tr></thead><tbody className="divide-y divide-slate-100">{paged.map((r,i)=>(
-                          <tr key={i} className="hover:bg-slate-50">{displayedHeaders.map(h=>{
-                            const v=cleanValue(r[h]); const low=v.toLowerCase()
-                            if(low==="active") return <td key={h} className="px-3 py-2"><span className="text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5">ACTIVE</span></td>
-                            if(low==="female") return <td key={h} className="px-3 py-2"><span className="text-xs bg-pink-50 text-pink-700 border border-pink-200 rounded-full px-2 py-0.5">Female</span></td>
-                            if(low==="male") return <td key={h} className="px-3 py-2"><span className="text-xs bg-sky-50 text-sky-700 border border-sky-200 rounded-full px-2 py-0.5">Male</span></td>
-                            return <td key={h} className="px-3 py-2 whitespace-nowrap max-w-[260px] truncate">{v||<span className="text-slate-300">—</span>}</td>
-                          })}</tr>
-                        ))}</tbody></table>
-                      </div>
-                      <div className="px-4 py-3 bg-slate-50 border-t flex items-center justify-between text-xs"><span>{fmt(filtered.length)} users</span><div className="flex gap-2"><button disabled={page<=1} onClick={()=>setPage(p=>p-1)} className="px-3 py-1 rounded-full border bg-white disabled:opacity-40">Prev</button><span className="px-3 py-1 bg-white border rounded-full">Page {page}/{totalPages}</span><button disabled={page>=totalPages} onClick={()=>setPage(p=>p+1)} className="px-3 py-1 rounded-full border bg-white disabled:opacity-40">Next</button></div></div>
-                    </div>
-                  </>
-                ):(
-                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-8 text-center"><div className="text-amber-800 font-semibold">Load the Registered Users Excel to see User Analysis</div><div className="text-sm text-amber-700 mt-1">Current file is {datasetType} — switch to a user file or upload one.</div><button onClick={()=>loadSample("/samples/sample-registered.xls","LR Portal Registered Users.xls")} className="mt-3 px-4 py-2 rounded-full bg-amber-600 text-white text-sm font-semibold">Load sample users</button></div>
-                )}
-              </div>
-            )}
-
-            {view==="data" && (
-              <div id="panel-data" role="region" aria-label="Detailed data" tabIndex={0} className="space-y-4 outline-none">
-                <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-wrap items-center gap-3">
-                  <span className="text-sm font-bold text-slate-900">Detailed Data</span>
-                  <span className="text-xs text-slate-600">Raw records retained separate from visuals • search reduces rows • export keeps filtered view</span>
-                  <div className="ml-auto flex items-center gap-2">
-                    <label className="sr-only" htmlFor="page-size">Rows per page</label>
-                    <select id="page-size" aria-label="Rows per page" value={pageSize} onChange={e=>setPageSize(Number(e.target.value))} className="px-2 py-1.5 rounded-xl border border-slate-200 bg-white text-xs focus-visible:ring-2 focus-visible:ring-indigo-500"><option value={10}>10 / page</option><option value={25}>25 / page</option><option value={50}>50 / page</option><option value={100}>100 / page</option></select>
-                    <button onClick={()=>{
-                      try{ const ws=XLSX.utils.json_to_sheet(filtered); const csv=XLSX.utils.sheet_to_csv(ws); const blob=new Blob([csv],{type:"text/csv"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=`sheetly-${reportingMonth}-${reportingYear}.csv`; a.click(); URL.revokeObjectURL(url); setToast(`Exported ${fmt(filtered.length)} rows to CSV`) } catch{ setToast("Export failed") }
-                    }} className="px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 focus-visible:ring-2 focus-visible:ring-indigo-500">Export CSV</button>
-                    <button onClick={()=>window.print()} className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-medium hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-indigo-500">Print</button>
-                  </div>
-                </div>
-
-                {/* Data Validation & Quality Summary per spec 23-24 */}
-                {quality && (
-                  <div className="grid lg:grid-cols-[1.1fr_0.9fr] gap-4">
-                    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-                      <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between"><div className="text-sm font-bold text-slate-900">Data Quality</div><span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${quality.status.includes("READY")?"bg-emerald-50 text-emerald-700 border-emerald-200":"bg-amber-50 text-amber-700 border-amber-200"}`}>{quality.status}</span></div>
-                      <div className="p-4 grid grid-cols-2 gap-3 text-sm">
-                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center"><div className="text-xs text-slate-600">Records Checked</div><div className="text-lg font-extrabold">{fmt(quality.total)}</div></div>
-                        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center"><div className="text-xs text-emerald-600">Complete Records</div><div className="text-lg font-extrabold text-emerald-700">{fmt(quality.complete)}</div></div>
-                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center"><div className="text-xs text-amber-600">Missing Values</div><div className="text-lg font-extrabold text-amber-700">{fmt(quality.missingRecords)}</div></div>
-                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center"><div className="text-xs text-slate-600">Duplicate Records</div><div className="text-lg font-extrabold">{fmt(quality.dups)}</div></div>
-                      </div>
-                      <div className="px-5 pb-4 text-xs text-slate-600">Validation Status: <b className={quality.status.includes("READY")?"text-emerald-700":"text-amber-700"}>{quality.status}</b> — review warnings before presenting dashboard.</div>
-                    </div>
-                    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-                      <div className="px-5 py-3 border-b border-slate-200"><div className="text-sm font-bold text-slate-900">Data Validation — 9 checks</div><div className="text-xs text-slate-600">Must pass before presenting monthly dashboard</div></div>
-                      <div className="divide-y divide-slate-100">
-                        {validationItems.map(v=>(
-                          <div key={v.label} className="flex items-center justify-between px-4 py-2 text-xs">
-                            <span className="flex items-center gap-2"><span className={`size-5 rounded-full grid place-items-center text-[11px] font-bold ${v.ok?"bg-emerald-500 text-white":"bg-amber-500 text-white"}`}>{v.ok?<CheckIcon className="size-3"/>:<AlertIcon className="size-3"/>}</span><span className="font-medium text-slate-700">{v.label}</span></span>
-                            <span className={`font-mono ${v.ok?"text-slate-600":"text-amber-700 font-semibold"}`}>{v.detail}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-                  <div className="px-4 py-3 border-b border-slate-200 flex flex-wrap items-center gap-2">
-                    <div className="relative"><label className="sr-only" htmlFor="data-search">Search data</label><input id="data-search" type="search" aria-label="Search school, user or ID" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search school, user, ID…" className="w-[240px] pl-8 pr-3 py-2 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none text-sm"/><SearchIcon className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-slate-500"/></div>
-                    <span className="text-xs text-slate-600">{fmt(filtered.length)} of {fmt(active?.rows.length??0)} match</span>
-                    <details className="ml-auto relative">
-                      <summary className="list-none cursor-pointer text-xs font-semibold px-3 py-2 rounded-xl border border-slate-200 bg-white">Columns ▾</summary>
-                      <div className="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-2xl shadow-xl p-2 z-20 max-h-72 overflow-auto">
-                        {active?.headers.map(h=>(
-                          <label key={h} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded-xl text-sm cursor-pointer">
-                            <input type="checkbox" checked={displayedHeaders.includes(h)} onChange={e=> setVisibleCols(prev=>{
-                              const cur=prev??active.headers; return e.target.checked? [...cur,h] : cur.filter(x=>x!==h)
-                            })}/><span className="truncate">{h}</span><span className="ml-auto inline-flex items-center text-[11px] px-1.5 py-0.5 rounded-full border bg-slate-50">{columnTypes[h]==="number"?"#":columnTypes[h]==="percent"?"%":columnTypes[h]==="date"?<CalendarIcon className="size-3"/>:"Aa"}</span>
-                          </label>
-                        ))}
-                        <button onClick={()=>setVisibleCols(active?.headers??null)} className="w-full mt-2 text-xs font-bold bg-slate-900 text-white rounded-full py-1.5">Reset</button>
-                      </div>
-                    </details>
-                  </div>
-                  <div tabIndex={0} role="region" aria-label="Detailed data table, scroll to see more" className="overflow-auto max-h-[560px] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset outline-none">
-                    <table className="w-full text-sm">
-                      <thead className="sticky top-0 bg-slate-50 border-b border-slate-200"><tr>{displayedHeaders.map(h=>(
-                        <th key={h} scope="col" tabIndex={0} role="button" aria-sort={sortKey===h ? (sortDir==="asc" ? "ascending" : "descending") : "none"} aria-label={`${h}, sortable, ${sortKey===h ? `sorted ${sortDir==="asc"?"ascending":"descending"}` : "not sorted"}. Press Enter to sort.`} onClick={()=>{ if(sortKey===h) setSortDir(d=>d==="asc"?"desc":"asc"); else {setSortKey(h); setSortDir("asc")}}} onKeyDown={e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); if(sortKey===h) setSortDir(d=>d==="asc"?"desc":"asc"); else {setSortKey(h); setSortDir("asc")} } }} className="text-left px-3 py-2.5 font-semibold cursor-pointer whitespace-nowrap hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 outline-none">{h} <span aria-hidden="true">{sortKey===h&&(sortDir==="asc"?"▲":"▼")}</span></th>
-                      ))}</tr></thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {paged.length===0? <tr><td colSpan={displayedHeaders.length} className="text-center py-12"><div className="mx-auto max-w-sm"><div className="size-10 mx-auto rounded-full bg-slate-100 grid place-items-center text-slate-600">∅</div><div className="mt-2 font-semibold text-slate-700">No rows match</div><div className="text-xs text-slate-600 mt-1 truncate px-4">“{String(deferredSearch).slice(0,60)}” — try clearing search or filters</div><button onClick={()=>{setSearch(""); setSchoolFilter("All Schools")}} className="mt-3 text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 bg-white hover:bg-slate-50">Clear filters</button></div></td></tr> : paged.map((r,i)=>(
-                          <tr key={i} className="hover:bg-slate-50">
-                            {displayedHeaders.map(h=>{
-                              const v=cleanValue(r[h]); const t=columnTypes[h]
-                              if(!v) return <td key={h} className="px-3 py-2"><span className="text-slate-600">—</span></td>
-                              const low=v.toLowerCase()
-                              if(low==="active") return <td key={h} className="px-3 py-2"><span className="text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5">ACTIVE</span></td>
-                              if(t==="percent"){ const n=toNumber(v)??0; let bg="bg-slate-100"; if(n===0) bg="bg-red-50 border-red-200 text-red-700"; else if(n<30) bg="bg-amber-50 border-amber-200"; return <td key={h} className="px-3 py-2"><span className={`px-2 py-0.5 rounded-full border text-xs font-semibold ${bg}`}>{v}</span></td> }
-                              if(isIdColumn(h)) return <td key={h} className="px-3 py-2 font-mono text-xs">{v}</td>
-                              if(t==="number"){ const n=toNumber(v); return <td key={h} className="px-3 py-2 font-mono text-xs">{n!==null&&n>=1000?fmt(n):v}</td> }
-                              return <td key={h} className="px-3 py-2 max-w-[320px] truncate" title={v}>{v}</td>
-                            })}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="px-4 py-3 bg-slate-50 border-t flex items-center justify-between text-xs"><span className="text-slate-600">Showing {(page-1)*pageSize+1}–{Math.min(page*pageSize,filtered.length)} of {fmt(filtered.length)}</span><div className="flex gap-2"><button aria-label={`Previous page, page ${page} of ${totalPages}`} disabled={page<=1} onClick={()=>setPage(p=>p-1)} className="px-3 py-1 rounded-full border bg-white disabled:opacity-40 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-indigo-500">‹ Prev</button><span aria-live="polite" aria-atomic="true" className="px-3 py-1 rounded-full bg-white border">Page {page}/{totalPages}</span><button aria-label={`Next page, page ${page} of ${totalPages}`} disabled={page>=totalPages} onClick={()=>setPage(p=>p+1)} className="px-3 py-1 rounded-full border bg-white disabled:opacity-40 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-indigo-500">Next ›</button></div></div>
-                </div>
-
-                <div className="bg-white border border-slate-200 rounded-2xl p-4">
-                  <div className="text-sm font-bold text-slate-900">Definitions / Notes</div>
-                  <div className="mt-2 grid sm:grid-cols-2 gap-2 text-xs">
-                    {[
-                      ["Registered Users","Total registered accounts"],
-                      ["Active Users","Users meeting activity criteria (Active status / >0 downloads)"],
-                      ["Participation Rate","Actual ÷ Registered ×100"],
-                      ["Active School","School with Downloads >0"],
-                      ["Downloads","Total recorded downloads"],
-                    ].map(([k,v])=>(
-                      <div key={k} className="flex gap-2 border border-slate-100 rounded-xl px-3 py-2 bg-slate-50"><span className="font-semibold text-slate-800 whitespace-nowrap">{k}:</span><span className="text-slate-600">{v}</span></div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-          )
-        )}
-      </main>
-
-      <footer className="border-t border-slate-200 mt-8 py-6 text-center text-xs text-slate-600">
-        Sheetly • Monthly Visual Report System • Data → Information → Visualization → Insight • Print hides controls • All local
-      </footer>
+            <div className="border-t border-white/10 px-5 py-3 text-center text-[10px] text-slate-500">© {new Date().getFullYear()} LR Portal Monitoring System · Data to information, information to insight.</div>
+          </footer>
         </div>
       </div>
-
-      {toast && <div role="status" aria-live="polite" className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-sm font-medium px-4 py-2.5 rounded-full shadow-xl z-50">{toast}</div>}
     </div>
   )
 }
 
-export default function App(){
-  const [auth,setAuth]=useState<"checking"|"authenticated"|"unauthenticated">("checking")
-  const [user,setUser]=useState<string|null>(null)
+export default function App() {
+  const [auth, setAuth] = useState<"checking" | "authenticated" | "unauthenticated">("checking")
+  const [user, setUser] = useState<string | null>(null)
 
-  useEffect(()=>{
-    let cancelled=false
-    async function check(){
-      try{
-        const response=await fetch("/api/auth/session",{headers:{accept:"application/json"}})
-        const data=await response.json().catch(()=>({}))
-        if(cancelled) return
-        if(response.ok&&data.authenticated){
-          setUser(typeof data.user==="string"?data.user:"")
+  useEffect(() => {
+    let cancelled = false
+    async function check() {
+      try {
+        const response = await fetch("/api/auth/session", { headers: { accept: "application/json" } })
+        const data = await response.json().catch(() => ({}))
+        if (cancelled) return
+        if (response.ok && data.authenticated) {
+          setUser(typeof data.user === "string" ? data.user : "")
           setAuth("authenticated")
-        }else{
+        } else {
           setAuth("unauthenticated")
         }
-      }catch{
-        if(!cancelled) setAuth("unauthenticated")
+      } catch {
+        if (!cancelled) setAuth("unauthenticated")
       }
     }
     void check()
-    return ()=>{cancelled=true}
-  },[])
+    return () => { cancelled = true }
+  }, [])
 
-  async function logout(){
-    try{ await fetch("/api/auth/logout",{method:"POST"}) }catch{}
+  async function logout() {
+    try { await fetch("/api/auth/logout", { method: "POST" }) } catch {}
     setUser(null)
     setAuth("unauthenticated")
   }
 
-  if(auth==="checking"){
+  if (auth === "checking") {
     return (
       <div className="min-h-screen bg-slate-50 grid place-items-center px-4">
         <div className="flex items-center gap-3" role="status" aria-live="polite">
           <div className="size-11 rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-500 grid place-items-center text-white font-black text-base shadow-lg shadow-indigo-600/20 animate-pulse">LR</div>
-          <div className="text-sm font-semibold text-slate-700">Loading Sheetly…</div>
+          <div><div className="text-sm font-bold text-slate-900">Loading LR Portal</div><div className="text-[11px] text-slate-500">Preparing your workspace…</div></div>
         </div>
       </div>
     )
   }
 
-  if(auth==="unauthenticated"||!user){
-    return <Login onSuccess={(name)=>{setUser(name); setAuth("authenticated")}} />
+  if (auth === "unauthenticated" || !user) {
+    return <Login onSuccess={(name) => { setUser(name); setAuth("authenticated") }} />
   }
 
-  return <AppShell user={user} onLogout={()=>void logout()} />
+  return <AppShell user={user} onLogout={() => void logout()} />
 }

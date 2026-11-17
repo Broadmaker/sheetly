@@ -1,6 +1,13 @@
 import { parseWorkbookBuffer } from "../../../src/lib/workbook"
 import { sha256Hex } from "../_lib/crypto"
 import { validateWorkbook, type Module, type ValidatedRow } from "../_lib/validation"
+import {
+  cleanSchoolId,
+  ensureSchool,
+  parsePeriodFromFilename,
+  parseSchoolIdFromFilename,
+  type SchoolInfo,
+} from "../_lib/school-scope"
 
 interface Env {
   DB: D1Database
@@ -13,6 +20,8 @@ interface CommitFields {
   reportingPeriod: string
   exportDate: string | null
   downloadBasis: "cumulative" | "period" | "unknown"
+  schoolId: string | null
+  detectedSchoolId: string | null
   buffer: ArrayBuffer
 }
 
@@ -24,17 +33,28 @@ async function readCommit(request: Request): Promise<CommitFields | Response> {
   const form = await request.formData()
   const file = form.get("file")
   const moduleValue = String(form.get("module") ?? "")
-  const reportingPeriod = String(form.get("reportingPeriod") ?? "").trim()
-  const exportDate = String(form.get("exportDate") ?? "").trim() || null
+  const inferredPeriod = file instanceof File ? parsePeriodFromFilename(file.name) : null
+  const requestedPeriod = String(form.get("reportingPeriod") ?? "").trim()
+  const reportingPeriod = requestedPeriod || inferredPeriod?.period || ""
+  const requestedExportDate = String(form.get("exportDate") ?? "").trim() || null
+  const exportDate = requestedExportDate ?? inferredPeriod?.exportDate ?? null
   const downloadBasisValue = String(form.get("downloadBasis") ?? "unknown")
+  const requestedSchoolId = cleanSchoolId(form.get("schoolId"))
+  const detectedSchoolId = file instanceof File ? parseSchoolIdFromFilename(file.name) : null
+  const schoolId = requestedSchoolId ?? detectedSchoolId
 
   if (!(file instanceof File)) return jsonError("Missing Excel file")
   if (moduleValue !== "school" && moduleValue !== "member") {
     return jsonError("module must be either school or member")
   }
-  if (!reportingPeriod) return jsonError("reportingPeriod is required")
+  if (!reportingPeriod) return jsonError("reportingPeriod is required. Include a date like 20261031 in the filename or send reportingPeriod.")
   if (!["cumulative", "period", "unknown"].includes(downloadBasisValue)) {
     return jsonError("downloadBasis must be cumulative, period, or unknown")
+  }
+  if (moduleValue === "member" && !schoolId) {
+    return jsonError(
+      "Select the school this user file belongs to. The filename does not include a deped-school-id.",
+    )
   }
 
   const buffer = await file.arrayBuffer()
@@ -46,6 +66,8 @@ async function readCommit(request: Request): Promise<CommitFields | Response> {
     reportingPeriod,
     exportDate,
     downloadBasis: downloadBasisValue as CommitFields["downloadBasis"],
+    schoolId: moduleValue === "member" ? schoolId : null,
+    detectedSchoolId,
     buffer,
   }
 }
@@ -101,18 +123,44 @@ function schoolRecordStatement(
     )
 }
 
+function schoolDirectoryStatement(
+  db: D1Database,
+  row: ValidatedRow,
+  reportingPeriod: string,
+): D1PreparedStatement {
+  return db
+    .prepare(
+      `INSERT INTO schools (school_id, school_name, division_id, is_master, last_seen_period, updated_at)
+       VALUES (?, ?, 'zamboanga-sibugay', 0, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+       ON CONFLICT(school_id) DO UPDATE SET
+         school_name = CASE
+           WHEN schools.is_master = 1 THEN schools.school_name
+           WHEN schools.school_name IS NULL OR schools.school_name = '' THEN excluded.school_name
+           ELSE schools.school_name
+         END,
+         last_seen_period = excluded.last_seen_period,
+         updated_at = excluded.updated_at`,
+    )
+    .bind(
+      row.data["SCHOOL ID"],
+      row.data["SCHOOL NAME"] || `School ${row.data["SCHOOL ID"]}`,
+      reportingPeriod,
+    )
+}
+
 function memberRecordStatement(
   db: D1Database,
   snapshotId: string,
   row: ValidatedRow,
+  school: SchoolInfo,
 ): D1PreparedStatement {
   return db
     .prepare(
       `INSERT INTO member_snapshot_records
         (id, snapshot_id, member_id, last_name, first_name, middle_name, full_name_normalized,
          gender, account_status, email, email_normalized, portal_role, total_downloads,
-         registered_at, raw_json, row_status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         registered_at, school_id, school_name, raw_json, row_status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       crypto.randomUUID(),
@@ -129,6 +177,8 @@ function memberRecordStatement(
       row.data["PORTAL ROLE"] || null,
       row.data["TOTAL DOWNLOADS"],
       row.data["REGISTERED"],
+      school.school_id,
+      school.school_name,
       JSON.stringify(row.raw),
       row.status,
     )
@@ -166,9 +216,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   const checksum = await sha256Hex(upload.buffer)
   const existing = await env.DB.prepare(
-    "SELECT id, status, uploaded_at FROM uploads WHERE module = ? AND checksum_sha256 = ? AND reporting_period = ?",
+    `SELECT id, status, uploaded_at FROM uploads
+     WHERE module = ? AND checksum_sha256 = ? AND reporting_period = ?
+       AND COALESCE(school_id, '') = COALESCE(?, '')`,
   )
-    .bind(upload.module, checksum, upload.reportingPeriod)
+    .bind(upload.module, checksum, upload.reportingPeriod, upload.schoolId)
     .first<{ id: string; status: string; uploaded_at: string }>()
 
   if (existing) {
@@ -179,6 +231,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       },
       { status: 409 },
     )
+  }
+
+  let school: SchoolInfo | null = null
+  if (upload.module === "member" && upload.schoolId) {
+    const fallbackName = String(validation.rows[0]?.data["SCHOOL NAME"] ?? "").trim() || null
+    school = await ensureSchool(env.DB, upload.schoolId, fallbackName)
   }
 
   const uploadId = crypto.randomUUID()
@@ -195,6 +253,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         module: upload.module,
         reportingPeriod: upload.reportingPeriod,
         checksum,
+        schoolId: upload.schoolId ?? "",
       },
     })
   } catch {
@@ -211,8 +270,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const uploadStatement = env.DB.prepare(
     `INSERT INTO uploads
       (id, module, original_filename, r2_key, checksum_sha256, size_bytes, reporting_period,
-       export_date, status, validation_summary_json)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'committed', ?)`,
+       export_date, school_id, status, validation_summary_json)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'committed', ?)`,
   ).bind(
     uploadId,
     upload.module,
@@ -222,6 +281,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     upload.buffer.byteLength,
     upload.reportingPeriod,
     upload.exportDate,
+    upload.schoolId,
     JSON.stringify(validationSummary),
   )
 
@@ -250,6 +310,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       reportingPeriod: upload.reportingPeriod,
       fileName: upload.file.name,
       checksum,
+      schoolId: upload.schoolId,
       summary: validation.summary,
     }),
   )
@@ -257,12 +318,19 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const recordStatements = validation.rows.map((row) =>
     upload.module === "school"
       ? schoolRecordStatement(env.DB, snapshotId, row)
-      : memberRecordStatement(env.DB, snapshotId, row),
+      : memberRecordStatement(env.DB, snapshotId, row, school!),
   )
+  const directoryStatements =
+    upload.module === "school"
+      ? validation.rows.map((row) => schoolDirectoryStatement(env.DB, row, upload.reportingPeriod))
+      : []
 
   try {
     await env.DB.batch([uploadStatement, snapshotStatement, auditStatement])
     for (const records of chunk(recordStatements, 250)) {
+      await env.DB.batch(records)
+    }
+    for (const records of chunk(directoryStatements, 250)) {
       await env.DB.batch(records)
     }
   } catch {
@@ -287,6 +355,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         sizeBytes: upload.buffer.byteLength,
         reportingPeriod: upload.reportingPeriod,
         exportDate: upload.exportDate,
+        schoolId: upload.schoolId,
       },
       snapshot: {
         id: snapshotId,
@@ -296,6 +365,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         downloadBasis: upload.downloadBasis,
         recordCount: validation.summary.total,
       },
+      school,
       validation: validationSummary,
     },
     { status: 201 },
